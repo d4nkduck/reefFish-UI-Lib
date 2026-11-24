@@ -644,7 +644,7 @@ end
 function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
- local f=self:_base(190)
+ local f=self:_base(230)
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
@@ -719,6 +719,23 @@ function Tab:CreateColorPicker(o)
  },f)
  round(hex,3)
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
+ local rgbFields={}
+ for channel,name in ipairs({"R","G","B"}) do
+  local x=9+(channel-1)*76
+  local caption=make("TextLabel",{
+   Position=UDim2.fromOffset(x,191),Size=UDim2.fromOffset(16,25),
+   BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
+   Font=Enum.Font.Code,TextSize=12
+  },f)
+  local field=make("TextBox",{
+   Position=UDim2.fromOffset(x+18,191),Size=UDim2.fromOffset(50,25),
+   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
+   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0,
+   ClearTextOnFocus=false,Text="0"
+  },f)
+  round(field,3)
+  rgbFields[channel]=field
+ end
  local function repaint()
   local c=Color3.fromHSV(hue,saturation,value)
   picker.BackgroundColor3=Color3.fromHSV(hue,1,1)
@@ -726,10 +743,23 @@ function Tab:CreateColorPicker(o)
   target.Position=UDim2.fromScale(saturation,1-value)
   hueMarker.Position=UDim2.fromScale(hue,.5)
   if not hex:IsFocused() then hex.Text=colorHex(c) end
+  local channels={c.R,c.G,c.B}
+  for i,field in ipairs(rgbFields) do
+   if not field:IsFocused() then field.Text=tostring(math.floor(channels[i]*255+.5)) end
+  end
  end
  local handle={}
  function handle:Get()return Color3.fromHSV(hue,saturation,value)end
  function handle:GetHex()return colorHex(handle:Get())end
+ function handle:GetRGB()
+  local c=handle:Get()
+  return math.floor(c.R*255+.5),math.floor(c.G*255+.5),math.floor(c.B*255+.5)
+ end
+ function handle:SetRGB(r,g,b,notify)
+  if type(r)~="number" or type(g)~="number" or type(b)~="number" then return false end
+  return handle:Set(Color3.fromRGB(math.clamp(math.floor(r+.5),0,255),
+   math.clamp(math.floor(g+.5),0,255),math.clamp(math.floor(b+.5),0,255)),notify)
+ end
  function handle:Set(c,notify)
   local parsed=parseColor(c)
   if not parsed then return false end
@@ -785,6 +815,17 @@ function Tab:CreateColorPicker(o)
   outline.Color=w.colors.muted outline.Transparency=.5
   if not handle:Set(hex.Text,true) then hex.Text=handle:GetHex() end
  end)
+ for _,field in ipairs(rgbFields) do
+  w._connections[#w._connections+1]=field.FocusLost:Connect(function()
+   local rgb={}
+   for i,box in ipairs(rgbFields) do rgb[i]=tonumber(box.Text) end
+   if rgb[1] and rgb[2] and rgb[3] then
+    handle:SetRGB(rgb[1],rgb[2],rgb[3],true)
+   else
+    repaint()
+   end
+  end)
+ end
  w:_register(o.Flag,handle)
  repaint()
  return handle
