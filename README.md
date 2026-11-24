@@ -1,8 +1,8 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.1.0-alpha  
+**Version:** 0.1.1-alpha  
 **License:** MIT  
-**Status:** Phase 1 functional prototype
+**Status:** Iterating alpha — redesigned animation and dropdowns
 
 A lightweight Roblox Luau UI library with an intentionally distinctive look: dark console panels framed by thick phosphor-green borders containing inverse Matrix rain (dark glyphs on green). Built for game debug tooling; reusable in client-side Roblox Studio projects.
 
@@ -11,9 +11,9 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 ## What works today
 
 - Draggable console window, minimize and close buttons, status line, notification banner
-- Thick inverse-Matrix border with a single throttled animation loop per window (5–15 updates/s)
+- Slim (12 px default, configurable 9–16 px) inverse-Matrix bezel with katakana/digit head-and-tail streams, updated at up to ~12.5 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
-- UI controls: tabs, sections, labels, buttons, toggles, sliders, dropdowns, text inputs
+- UI controls: tabs, sections, labels, buttons, toggles, sliders, **searchable popup dropdowns**, text inputs
 - Built-in Appearance and Config tabs (unless disabled)
 - Session-safe component callback dispatch with `pcall`
 - Game configuration profiles and independently stored appearance profiles
@@ -116,6 +116,14 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 MIT. See `LICENSE`.
 ## GitHub alpha implementation notes
 
-The published GitHub source is a **compact alpha implementation** of the planned library. It is not byte-for-byte the earlier downloadable prototype. Dropdowns currently cycle through options when clicked (rather than opening a searchable menu); the interface is draggable but not resizable; and profile saving is limited to the provided JSON/file adapter or session memory. Some items described above are roadmap goals. Run the included example in Roblox Studio before depending on this in a published project.
+The published GitHub source is a **compact alpha implementation** of the planned library. It is not byte-for-byte the earlier downloadable prototype. Dropdowns now open a searchable scrollable popup, and the border has directional character trails; the interface is draggable but not resizable; and profile saving is limited to the provided JSON/file adapter or session memory. Some items described above are roadmap goals. Run the included example in Roblox Studio before depending on this in a published project.
 
 Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`. Both currently contain the same alpha code.
+
+## v0.1.1-alpha changes
+
+- The border uses a 12px default instead of 18px (configure with `BorderThickness`, constrained to 9–16px).
+- The inverse Matrix border now renders reusable streams with a moving head, fading trailing glyphs, digits, and katakana. Vertical trails run on the side bezels, with horizontally adapted trails on top/bottom.
+- Dropdown controls open a searchable, scrolling option list. Use `Dropdown:SetOptions({...})` to refresh choices.
+- Reloading a window attempts to clean up the previous tracked instance before constructing a new one.
+- As with earlier alpha versions, test with your own client version; this release is not verified against every third-party execution environment.
