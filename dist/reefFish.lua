@@ -1,10 +1,10 @@
--- reefFish UI Lib v0.1.1-alpha
+-- reefFish UI Lib v0.1.2-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.1.1-alpha"}
+local Lib={Version="0.1.2-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -57,7 +57,7 @@ function Window:SetRain(enabled,density,speed)
  self.rainEnabled=enabled~=false
  if type(density)=="number" then self.rainDensity=math.clamp(density,0,1) end
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
- for _,strip in ipairs(self._strips) do strip.frame.Visible=self.rainEnabled end
+ if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
 end
 function Window:Notify(msg,kind)
  self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
@@ -370,8 +370,8 @@ function Lib:CreateWindow(o)
  local w=setmetatable({
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=true,rainDensity=.7,rainSpeed=.45,minimized=false,destroyed=false,
-  flags={},tabs={},_bound={},_connections={},_strips={},fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
+  rainEnabled=true,rainDensity=.72,rainSpeed=.4,minimized=false,destroyed=false,
+  flags={},tabs={},_bound={},_connections={},fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
  w.StorageMode=w.fs and "file" or "memory"
  local parent=player:WaitForChild("PlayerGui")
@@ -422,9 +422,11 @@ function Lib:CreateWindow(o)
    w.root.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+diff.X,startPos.Y.Scale,startPos.Y.Offset+diff.Y)
   end
  end)
- -- Inverse Matrix streams: reusable trails with a leading glyph and a fading tail.
- -- Side streams fall vertically; the top and bottom streams travel along their narrow bezels.
- -- All characters are dark-on-green. No per-frame Instance creation or unrestricted loops.
+ -- A SINGLE vertical Matrix field sits behind the content.
+ -- The green window background is the bezel; the opaque inner panel masks
+ -- the field everywhere except the border. No rain travels around the edges.
+ -- Streams fall down at independent speeds. The field drifts RIGHT very slowly.
+ -- Instance creation happens ONCE, never in the animation update.
  local glyphs={"0","1","2","3","4","5","6","7","8","9",
   "ア","イ","ウ","エ","オ","カ","キ","ク","ケ","コ",
   "サ","シ","ス","セ","ソ","タ","チ","ツ","テ","ト",
@@ -432,76 +434,78 @@ function Lib:CreateWindow(o)
   "マ","ミ","ム","メ","モ","ヤ","ユ","ヨ","ラ","リ",
   "ル","レ","ロ","ワ","ヲ","ン"}
  local charCell=11
- for _,side in ipairs({"top","bottom","left","right"}) do
-  local horizontal=side=="top" or side=="bottom"
-  local direction=side=="bottom" and -1 or 1
-  local p=(side=="top" and UDim2.fromOffset(0,0))
-    or (side=="bottom" and UDim2.new(0,0,1,-pad))
-    or (side=="left" and UDim2.fromOffset(0,pad))
-    or UDim2.new(1,-pad,0,pad)
-  local sz=horizontal and UDim2.new(1,0,0,pad)
-    or UDim2.new(0,pad,1,-pad*2)
-  local strip=make("Frame",{
-   Position=p,Size=sz,ClipsDescendants=true,
-   BackgroundTransparency=1,ZIndex=2
-  },w.root)
-  local streams={}
-  for streamIndex=1,(horizontal and 6 or 4) do
-   local len=math.random(4,8)
-   local chars={}
-   for n=1,len do
-    local label=make("TextLabel",{
-     Size=UDim2.fromOffset(charCell,charCell),
-     BackgroundTransparency=1,
-     Font=Enum.Font.Code,TextSize=10,
-     Text=glyphs[math.random(#glyphs)],
-     TextTransparency=math.clamp((n-1)*.16,.04,.94),
-     ZIndex=3,Visible=false
-    },strip)
-    w:_theme(label,"TextColor3","ink")
-    chars[n]=label
-   end
-   streams[#streams+1]={
-    head=-(streamIndex-1)*charCell*10,
-    speed=math.random(35,75),
-    direction=direction,
-    length=len,
-    chars=chars
-   }
+ local spacing=12
+ local columns=math.ceil(w.width/spacing)+2
+ local fieldWidth=columns*spacing
+ local rainLayer=make("Frame",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+  BorderSizePixel=0,ClipsDescendants=true,Active=false,ZIndex=2
+ },w.root)
+ w._rainLayer=rainLayer
+ local streams={}
+ for column=1,columns do
+  local length=math.random(7,12)
+  local labels={}
+  for n=1,length do
+   local relative=(n-1)/math.max(1,length-1)
+   local label=make("TextLabel",{
+    Size=UDim2.fromOffset(charCell,charCell),
+    BackgroundTransparency=1,BorderSizePixel=0,
+    Font=Enum.Font.Code,TextSize=10,
+    Text=glyphs[math.random(#glyphs)],
+    TextTransparency=math.clamp(.05+.9*relative*relative,.05,.96),
+    ZIndex=3,Visible=false
+   },rainLayer)
+   w:_theme(label,"TextColor3","ink")
+   labels[n]=label
   end
-  w._strips[#w._strips+1]={frame=strip,streams=streams,horizontal=horizontal}
+  streams[column]={
+   head=math.random(-w.height,w.height),
+   speed=math.random(25,59),
+   length=length,
+   labels=labels
+  }
  end
- local accumulator=0
+ local elapsedBuffer=0
+ local horizontalOffset=0
  w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function(dt)
   if w.destroyed or not w.rainEnabled or w.minimized then return end
-  accumulator+=dt
-  if accumulator<.08 then return end
-  local elapsed=math.min(accumulator,.2)
-  accumulator=0
-  for _,strip in ipairs(w._strips) do
-   local span=strip.horizontal and strip.frame.AbsoluteSize.X or strip.frame.AbsoluteSize.Y
-   if span>0 then
-    local visibleStreams=math.ceil(#strip.streams*w.rainDensity)
-    for index,stream in ipairs(strip.streams) do
-     stream.head+=stream.speed*elapsed*(.4+w.rainSpeed*1.5)*stream.direction
-     if stream.direction>0 and stream.head>span+stream.length*charCell then
-      stream.head=-stream.length*charCell-math.random(0,70)
-     elseif stream.direction<0 and stream.head<-(stream.length*charCell) then
-      stream.head=span+stream.length*charCell+math.random(0,70)
-     end
-     for n,label in ipairs(stream.chars) do
-      local at=stream.head-(n-1)*charCell*stream.direction
-      label.Visible=index<=visibleStreams and at>=0 and at<span-charCell
-      if label.Visible then
-       if strip.horizontal then
-        label.Position=UDim2.fromOffset(math.floor(at),math.max(0,math.floor((pad-charCell)/2)))
-       else
-        label.Position=UDim2.fromOffset(math.max(0,math.floor((pad-charCell)/2)),math.floor(at))
-       end
-       if n==1 or math.random()<.18 then
-        label.Text=glyphs[math.random(#glyphs)]
-       end
-      end
+  elapsedBuffer+=dt
+  if elapsedBuffer<.10 then return end -- Max ~10 animation updates/second
+  local elapsed=math.min(elapsedBuffer,.25)
+  elapsedBuffer=0
+  local width=w.root.AbsoluteSize.X
+  local height=w.root.AbsoluteSize.Y
+  if width<=0 or height<=0 then return end
+
+  -- Continuous gentle rightward scroll, independent of falling speed.
+  -- Each column wraps only after travelling across the ENTIRE field.
+  horizontalOffset=(horizontalOffset+elapsed*(1.5+2*w.rainSpeed))%fieldWidth
+  for index,stream in ipairs(streams) do
+   stream.head+=elapsed*stream.speed*(.55+w.rainSpeed)
+   if stream.head-(stream.length-1)*charCell>height then
+    -- Restart above the frame at a randomized delay, like natural rain.
+    stream.head=-math.random(0,height)
+    stream.speed=math.random(25,59)
+   end
+   local x=(((index-1)*spacing+horizontalOffset)%fieldWidth)-spacing
+   local visibleCount=w.rainDensity>0 and
+     math.max(2,math.ceil(stream.length*w.rainDensity)) or 0
+
+   for n,label in ipairs(stream.labels) do
+    local y=stream.head-(n-1)*charCell
+    local inFrame=(x+charCell>0 and x<width and y+charCell>0 and y<height)
+    local onBorder=(x<pad or x+charCell>width-pad or
+      y<pad or y+charCell>height-pad)
+
+    -- The inner content panel masks the whole field except the bezel;
+    -- this check also avoids updating glyphs hidden far inside the panel.
+    local show=n<=visibleCount and inFrame and onBorder
+    label.Visible=show
+    if show then
+     label.Position=UDim2.fromOffset(math.floor(x),math.floor(y))
+     if n==1 or math.random()<.11 then
+      label.Text=glyphs[math.random(#glyphs)]
      end
     end
    end
