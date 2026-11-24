@@ -1,10 +1,10 @@
--- reefFish UI Lib v0.1.3-alpha
+-- reefFish UI Lib v0.2.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.1.3-alpha"}
+local Lib={Version="0.2.0-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -27,7 +27,7 @@ local function validName(n)
  return type(n)=="string" and #n>0 and #n<=48 and n:match("^[%w_%-]+$")~=nil
 end
 local function storage()
- local funcs={read=readfile,write=writefile,mkdir=makefolder,exists=isfile,dir=isfolder}
+ local funcs={read=readfile,write=writefile,mkdir=makefolder,exists=isfile,dir=isfolder,list=listfiles,delete=delfile}
  if type(funcs.read)=="function" and type(funcs.write)=="function" and type(funcs.mkdir)=="function" then return funcs end
  return nil
 end
@@ -42,6 +42,46 @@ local function ensureDir(fs,path)
 end
 local Window={} Window.__index=Window
 local Tab={} Tab.__index=Tab
+-- Small, central interaction-state engine: no per-control animation loops.
+function Window:_feedback(hitbox,surface)
+ local state="normal"
+ local function refresh()
+  if not surface.Parent then return end
+  local base=self.colors.raised
+  if state=="hover" then
+   surface.BackgroundColor3=base:Lerp(self.colors.accent,.16)
+  elseif state=="pressed" then
+   surface.BackgroundColor3=base:Lerp(self.colors.accent,.32)
+  else
+   surface.BackgroundColor3=base
+  end
+ end
+ self._feedbackRefresh[#self._feedbackRefresh+1]=refresh
+ local function add(signal,fn)
+  self._connections[#self._connections+1]=signal:Connect(fn)
+ end
+ add(hitbox.MouseEnter,function()state="hover" refresh()end)
+ add(hitbox.MouseLeave,function()state="normal" refresh()end)
+ add(hitbox.MouseButton1Down,function()state="pressed" refresh()end)
+ add(hitbox.MouseButton1Up,function()state="hover" refresh()end)
+ refresh()
+end
+function Window:_markChanged(kind)
+ if self._importing then return end
+ local name=self._autosaveTargets[kind]
+ if name then self._autosaveDue[kind]=os.clock()+1 end
+end
+function Window:SetBorderThickness(value)
+ local n=math.clamp(math.floor(tonumber(value) or self.borderThickness),9,16)
+ self.borderThickness=n
+ if self.inner then
+  self.inner.Position=UDim2.fromOffset(n,n)
+  self.inner.Size=UDim2.new(1,-2*n,1,-2*n)
+  self:SetMinimized(self.minimized)
+ end
+ self:_markChanged("appearance")
+ return n
+end
 function Window:_theme(obj,property,token)
  self._bound[#self._bound+1]={obj,property,token}
  obj[property]=self.colors[token]
@@ -51,7 +91,10 @@ function Window:SetTheme(name)
  if self._closeDropdown then self._closeDropdown() end
  self.themeName=name self.colors=palettes[name]
  for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
+ for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
+ self:_markChanged("appearance")
  return true
 end
 function Window:SetRain(enabled,density,speed)
@@ -60,6 +103,7 @@ function Window:SetRain(enabled,density,speed)
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
  if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
  if self._rainColumns and self._repaintRain then self._repaintRain() end
+ self:_markChanged("appearance")
 end
 function Window:Notify(msg,kind)
  self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
@@ -81,6 +125,14 @@ function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
+ -- Flush any queued autosaves before disconnecting.
+ for kind,due in pairs(self._autosaveDue) do
+  local name=self._autosaveTargets[kind]
+  if due and name then
+   local obj=kind=="appearance" and self.Appearance or self.Config
+   if obj then pcall(function()obj:Save(name)end) end
+  end
+ end
  for _,c in ipairs(self._connections) do c:Disconnect() end
  self.screen:Destroy()
  if self._registry and self._registry.__reefFishWindow==self then
@@ -123,8 +175,9 @@ end
 function Tab:CreateButton(o)
  local w=self.window
  local f=self:_base(36)
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="[ "..tostring(o.Name or "Button").." ]",Font=Enum.Font.Code,TextSize=15},f)
+ local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Text="[ "..tostring(o.Name or "Button").." ]",Font=Enum.Font.Code,TextSize=15},f)
  w:_theme(b,"TextColor3","accent")
+ w:_feedback(b,f)
  local disabled=false
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
  return {SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end}
@@ -133,12 +186,19 @@ function Tab:CreateToggle(o)
  local w=self.window
  local f=self:_base(37)
  local value=o.Default==true
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(b,"TextColor3","text")
+ w:_feedback(b,f)
  local function render()b.Text="  ["..(value and "X" or " ").."] "..tostring(o.Name or "Toggle")end
  local handle={}
  function handle:Get()return value end
- function handle:Set(v,notify)value=v==true render() if notify then fire(o.Callback,value) end end
+ function handle:Set(v,notify)
+  if type(v)~="boolean" then return false end
+  value=v
+  render()
+  if notify then w:_markChanged("game") fire(o.Callback,value) end
+  return true
+ end
  w:_register(o.Flag,handle)
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()handle:Set(not value,true)end)
  render() return handle
@@ -152,20 +212,31 @@ function Tab:CreateSlider(o)
  local value=math.clamp(tonumber(o.Default) or min,min,max)
  local name=make("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(name,"TextColor3","text")
- local bar=make("TextButton",{Size=UDim2.new(1,-16,0,13),Position=UDim2.new(0,8,0,32),BorderSizePixel=0,Text=""},f)
+ local bar=make("TextButton",{Size=UDim2.new(1,-16,0,8),Position=UDim2.new(0,8,0,36),BorderSizePixel=0,Text="",AutoButtonColor=false},f)
  w:_theme(bar,"BackgroundColor3","panel")
+ round(bar,4)
  local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},bar)
  w:_theme(fill,"BackgroundColor3","accent")
+ round(fill,4)
+ local thumb=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(0,.5),
+  Size=UDim2.fromOffset(14,14),BorderSizePixel=0,Active=false
+ },bar)
+ w:_theme(thumb,"BackgroundColor3","accent")
+ round(thumb,7)
  local handle={}
  local function render()
   name.Text=tostring(o.Name or "Slider").."  "..tostring(value)
-  fill.Size=UDim2.fromScale((value-min)/(max-min),1)
+  local progress=(value-min)/(max-min)
+  fill.Size=UDim2.fromScale(progress,1)
+  thumb.Position=UDim2.fromScale(progress,.5)
  end
  function handle:Get()return value end
  function handle:Set(v,notify)
   if type(v)~="number" then return end
   value=math.clamp(min+math.floor(((v-min)/inc)+.5)*inc,min,max)
-  render() if notify then fire(o.Callback,value) end
+  render()
+  if notify then w:_markChanged("game") fire(o.Callback,value) end
  end
  local dragging=false
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
@@ -190,9 +261,10 @@ function Tab:CreateDropdown(o)
  local value=table.find(opts,o.Default) and o.Default or opts[1]
  local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
- local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
+ local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0,AutoButtonColor=false},f)
  w:_theme(b,"TextColor3","accent")
  w:_theme(b,"BackgroundColor3","panel")
+ w:_feedback(b,f)
  local handle={}
  local function render() b.Text=tostring(value or "Select...").."  ▾" end
  function handle:Get() return value end
@@ -200,7 +272,7 @@ function Tab:CreateDropdown(o)
   if not table.find(opts,v) then return false end
   value=v
   render()
-  if notify then fire(o.Callback,value) end
+  if notify then w:_markChanged("game") fire(o.Callback,value) end
   return true
  end
  function handle:SetOptions(nextOptions)
@@ -303,13 +375,24 @@ function Tab:CreateInput(o)
  w:_theme(name,"TextColor3","text")
  local box=make("TextBox",{Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),ClearTextOnFocus=false,Size=UDim2.new(1,-14,0,29),Position=UDim2.fromOffset(7,28),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
  w:_theme(box,"TextColor3","accent")w:_theme(box,"BackgroundColor3","panel")
+ local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.45},box)
+ w._connections[#w._connections+1]=box.Focused:Connect(function()
+  outline.Color=w.colors.accent outline.Transparency=0
+ end)
  local handle={}
  function handle:Get()return box.Text end
  function handle:Set(v,notify)
   if o.Numeric and tonumber(v)==nil then return end
-  box.Text=tostring(v) if notify then fire(o.Callback,box.Text) end
+  box.Text=tostring(v)
+  if notify then w:_markChanged("game") fire(o.Callback,box.Text) end
  end
- w._connections[#w._connections+1]=box.FocusLost:Connect(function() if not o.Numeric or tonumber(box.Text) then fire(o.Callback,box.Text) end end)
+ w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+  outline.Color=w.colors.muted outline.Transparency=.45
+  if not o.Numeric or tonumber(box.Text) then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,box.Text)
+  end
+ end)
  w:_register(o.Flag,handle) return handle
 end
 function Window:_register(flag,handle)
@@ -373,7 +456,9 @@ function Lib:CreateWindow(o)
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
   rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
-  flags={},tabs={},_bound={},_connections={},fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
+  flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
+  _autosaveTargets={},_autosaveDue={},_importing=false,
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
  w.StorageMode=w.fs and "file" or "memory"
  local parent=player:WaitForChild("PlayerGui")
@@ -396,9 +481,10 @@ function Lib:CreateWindow(o)
  local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
+ w.inner=inner
  local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
  w:_theme(top,"BackgroundColor3","panel")
- local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  [0.1.3]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
+ local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  [0.2.0]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
  w:_theme(caption,"TextColor3","accent")
  local min=make("TextButton",{Text="_",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-72,0,6),BorderSizePixel=0,ZIndex=7},top)
  local close=make("TextButton",{Text="X",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-37,0,6),BorderSizePixel=0,ZIndex=7},top)
@@ -407,7 +493,7 @@ function Lib:CreateWindow(o)
  w.nav=make("ScrollingFrame",{Size=UDim2.new(.3,0,1,0),ScrollBarThickness=0,BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6},w.body)
  make("UIListLayout",{Padding=UDim.new(0,4)},w.nav)
  w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
- w._status=make("TextLabel",{Text="> reefFish 0.1.3 | VERTICAL MATRIX | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
+ w._status=make("TextLabel",{Text="> reefFish 0.2.0 | PROFILES | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
  w:_theme(w._status,"TextColor3","muted")
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
@@ -456,14 +542,22 @@ function Lib:CreateWindow(o)
    math.floor(c.G*255+.5),
    math.floor(c.B*255+.5))
  end
- local function updateText(stream)
+ local function updateText(stream,initial)
   local lines={}
   local length=stream.length
   local visible=math.floor(length*w.rainDensity+.5)
   for n=1,length do
-   local char=visible>0 and n>length-visible and glyphs[math.random(#glyphs)] or " "
-   local fade=(n/length)^1.7
-   local color=w.colors.border:Lerp(w.colors.ink,fade)
+   local shown=visible>0 and n>length-visible
+   -- Inverse Matrix: the falling HEAD at the bottom is near-black;
+   -- the older tail above fades into the green border background.
+   -- This is the inverse of green-on-black rain, NOT a flipped stream.
+   if initial or stream.glyphs[n]==nil or n==length or math.random()<.15 then
+    stream.glyphs[n]=glyphs[math.random(#glyphs)]
+   end
+   local distance=math.clamp((n-(length-visible))/math.max(visible,1),0,1)
+   local contrast=distance*distance
+   local color=w.colors.border:Lerp(w.colors.ink,contrast)
+   local char=shown and stream.glyphs[n] or " "
    lines[n]='<font color="'..hex(color)..'">'..char..'</font>'
   end
   stream.label.Text=table.concat(lines,"\n")
@@ -487,10 +581,10 @@ function Lib:CreateWindow(o)
    x=(col-2)*spacing,
    speed=math.random(25,60),
    change=math.random(),
-   seed=col
+   seed=col,glyphs={}
   }
   streams[col]=stream
-  updateText(stream)
+  updateText(stream,true)
  end
  w._rainColumns=streams
  w._repaintRain=function()
