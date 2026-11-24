@@ -1,6 +1,6 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.1.2-alpha  
+**Version:** 0.1.3-alpha  
 **License:** MIT  
 **Status:** Iterating alpha — redesigned animation and dropdowns
 
@@ -136,3 +136,20 @@ Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`
 - Each trail includes changing digits/katakana, a darker leading character, and fading tail; the animation uses pooled labels and a capped 10 Hz update loop.
 - Searchable dropdowns and other controls remain available.
 - This release has not been visually validated in Roblox/Xeno; please test the updated loader.
+
+## v0.1.3-alpha — unmistakably vertical rain and cache diagnosis
+
+- Uses one global full-window Matrix **wallpaper**, masked by the opaque console so **only the narrow border** reveals it.
+- Every code column falls straight down; the whole wallpaper drifts right at just **0.18–0.48 pixels per second** (depending on rain speed).
+- Each stream is now a **single multiline RichText label** with a shaded tail (instead of many independently moving glyph labels); Unicode katakana and digits are preserved.
+- Visible version identifiers: the title includes **[0.1.3]** and the status bar includes **VERTICAL MATRIX**.
+- New unique distribution path **`dist/reefFish-v0.1.3.lua`** avoids potential caching of the earlier `dist/reefFish.lua` URL.
+- Temporary Xeno-compatible smoke-test launcher:
+
+```lua
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/d4nkduck/reefFish-UI-Lib/main/dist/reefFish-v0.1.3.lua"))()
+assert(UI.Version == "0.1.3-alpha", "Outdated reefFish build loaded: " .. tostring(UI.Version))
+local Window = UI:CreateWindow({Title="Matrix rain v0.1.3 test", Theme="MatrixInverse", BorderThickness=12})
+```
+
+The GitHub files have been verified, but this UI has **not yet been visually tested in Xeno**. If the version string is wrong, the environment is still loading old code; if the version is correct but animation appears wrong, report the version and a screenshot or short description.
