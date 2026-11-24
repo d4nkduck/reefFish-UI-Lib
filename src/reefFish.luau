@@ -1,10 +1,10 @@
--- reefFish UI Lib v0.1.0-alpha
+-- reefFish UI Lib v0.1.1-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.1.0-alpha"}
+local Lib={Version="0.1.1-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -48,6 +48,7 @@ function Window:_theme(obj,property,token)
 end
 function Window:SetTheme(name)
  if not palettes[name] then return false end
+ if self._closeDropdown then self._closeDropdown() end
  self.themeName=name self.colors=palettes[name]
  for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
  return true
@@ -63,8 +64,9 @@ function Window:Notify(msg,kind)
 end
 function Window:SetMinimized(value)
  self.minimized=value==true
+ if self._closeDropdown then self._closeDropdown() end
  self.body.Visible=not self.minimized
- self.root.Size=UDim2.fromOffset(self.width,self.minimized and 46 or self.height)
+ self.root.Size=UDim2.fromOffset(self.width,self.minimized and (42+self.borderThickness*2) or self.height)
 end
 function Window:SelectTab(tab)
  for _,t in ipairs(self.tabs) do
@@ -76,8 +78,12 @@ end
 function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
+ if self._closeDropdown then self._closeDropdown() end
  for _,c in ipairs(self._connections) do c:Disconnect() end
  self.screen:Destroy()
+ if self._registry and self._registry.__reefFishWindow==self then
+  self._registry.__reefFishWindow=nil
+ end
 end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
@@ -174,27 +180,119 @@ function Tab:CreateSlider(o)
  w:_register(o.Flag,handle) render() return handle
 end
 function Tab:CreateDropdown(o)
+ -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
+ o=o or {}
  local w=self.window
  local f=self:_base(70)
  local opts=o.Options or {}
- local value=o.Default or opts[1]
+ local value=table.find(opts,o.Default) and o.Default or opts[1]
  local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
  local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
- w:_theme(b,"TextColor3","accent") w:_theme(b,"BackgroundColor3","panel")
+ w:_theme(b,"TextColor3","accent")
+ w:_theme(b,"BackgroundColor3","panel")
  local handle={}
- local function render()b.Text=tostring(value).."  v"end
- function handle:Get()return value end
+ local function render() b.Text=tostring(value or "Select...").."  ▾" end
+ function handle:Get() return value end
  function handle:Set(v,notify)
-  if not table.find(opts,v) then return end
-  value=v render() if notify then fire(o.Callback,value) end
+  if not table.find(opts,v) then return false end
+  value=v
+  render()
+  if notify then fire(o.Callback,value) end
+  return true
+ end
+ function handle:SetOptions(nextOptions)
+  if type(nextOptions)~="table" then return end
+  opts=nextOptions
+  if not table.find(opts,value) then value=opts[1] end
+  render()
+  if w._closeDropdown then w._closeDropdown() end
  end
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
-  if #opts==0 then return end
-  local at=table.find(opts,value) or 0
-  handle:Set(opts[at%#opts+1],true)
+  if w.destroyed then return end
+  if w._dropdownOwner==b and w._closeDropdown then
+   w._closeDropdown()
+   return
+  end
+  if w._closeDropdown then w._closeDropdown() end
+  local overlay=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=100},w.screen)
+  local dismiss=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="",AutoButtonColor=false,ZIndex=101},overlay)
+  local rows=math.min(#opts,6)
+  local panelHeight=math.max(82,math.min(246,rows*29+46))
+  local panelWidth=math.max(155,b.AbsoluteSize.X)
+  local panel=make("Frame",{Size=UDim2.fromOffset(panelWidth,panelHeight),BorderSizePixel=0,ZIndex=102},overlay)
+  panel.BackgroundColor3=w.colors.panel
+  round(panel,5)
+  make("UIStroke",{Color=w.colors.border,Thickness=1,ZIndex=102},panel)
+  local function positionPanel()
+   local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+   local x=math.clamp(b.AbsolutePosition.X,6,math.max(6,viewport.X-panelWidth-6))
+   local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y+4
+   if y+panelHeight>viewport.Y-8 then y=b.AbsolutePosition.Y-panelHeight-4 end
+   y=math.clamp(y,6,math.max(6,viewport.Y-panelHeight-6))
+   panel.Position=UDim2.fromOffset(x,y)
+  end
+  positionPanel()
+  local search=make("TextBox",{
+   Size=UDim2.new(1,-12,0,29),Position=UDim2.fromOffset(6,6),
+   BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
+   PlaceholderColor3=w.colors.muted,PlaceholderText="Search options...",
+   Text="",ClearTextOnFocus=false,Font=Enum.Font.Code,TextSize=13,
+   BorderSizePixel=0,ZIndex=104
+  },panel)
+  round(search,3)
+  local list=make("ScrollingFrame",{
+   Position=UDim2.fromOffset(6,41),Size=UDim2.new(1,-12,1,-47),
+   BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
+   ScrollBarImageColor3=w.colors.border,AutomaticCanvasSize=Enum.AutomaticSize.Y,
+   CanvasSize=UDim2.new(),ZIndex=103
+  },panel)
+  make("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,2)},list)
+  local optionButtons={}
+  local function updateList()
+   for _,item in ipairs(optionButtons) do item:Destroy() end
+   table.clear(optionButtons)
+   local query=string.lower(search.Text)
+   for _,option in ipairs(opts) do
+    local label=tostring(option)
+    if query=="" or string.find(string.lower(label),query,1,true) then
+     local chosen=option
+     local item=make("TextButton",{
+      Text=(chosen==value and "✓  " or "   ")..label,
+      Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
+      TextColor3=chosen==value and w.colors.accent or w.colors.text,
+      BorderSizePixel=0,Font=Enum.Font.Code,TextSize=13,
+      TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
+     },list)
+     round(item,3)
+     optionButtons[#optionButtons+1]=item
+     item.MouseButton1Click:Connect(function()
+      handle:Set(chosen,true)
+      if w._closeDropdown then w._closeDropdown() end
+     end)
+    end
+   end
+   list.CanvasPosition=Vector2.zero
+  end
+  local positionConn=b:GetPropertyChangedSignal("AbsolutePosition"):Connect(positionPanel)
+  local sizeConn=b:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionPanel)
+  w._dropdownOwner=b
+  w._closeDropdown=function()
+   if positionConn then positionConn:Disconnect() positionConn=nil end
+   if sizeConn then sizeConn:Disconnect() sizeConn=nil end
+   if overlay then overlay:Destroy() overlay=nil end
+   w._closeDropdown=nil
+   w._dropdownOwner=nil
+  end
+  dismiss.MouseButton1Click:Connect(function()
+   if w._closeDropdown then w._closeDropdown() end
+  end)
+  search:GetPropertyChangedSignal("Text"):Connect(updateList)
+  updateList()
  end)
- w:_register(o.Flag,handle) render() return handle
+ w:_register(o.Flag,handle)
+ render()
+ return handle
 end
 function Tab:CreateInput(o)
  local w=self.window
@@ -272,17 +370,28 @@ function Lib:CreateWindow(o)
  local w=setmetatable({
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=true,rainDensity=.45,rainSpeed=.35,minimized=false,destroyed=false,
-  flags={},tabs={},_bound={},_connections={},_strips={},fs=storage()
+  rainEnabled=true,rainDensity=.7,rainSpeed=.45,minimized=false,destroyed=false,
+  flags={},tabs={},_bound={},_connections={},_strips={},fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
  w.StorageMode=w.fs and "file" or "memory"
  local parent=player:WaitForChild("PlayerGui")
+ local registry=_G
+ if type(getgenv)=="function" then
+  local ok,env=pcall(getgenv)
+  if ok and type(env)=="table" then registry=env end
+ end
+ local previous=registry.__reefFishWindow
+ if previous and type(previous.Destroy)=="function" then
+  pcall(function()previous:Destroy()end)
+ end
  local old=parent:FindFirstChild("reefFishUI")
  if old then old:Destroy() end
+ w._registry=registry
+ registry.__reefFishWindow=w
  w.screen=make("ScreenGui",{Name="reefFishUI",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},parent)
  w.root=make("Frame",{Size=UDim2.fromOffset(w.width,w.height),Position=UDim2.new(.5,-w.width/2,.5,-w.height/2),BorderSizePixel=0,ClipsDescendants=true},w.screen)
  w:_theme(w.root,"BackgroundColor3","border")
- local pad=18
+ local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
  local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
@@ -313,34 +422,88 @@ function Lib:CreateWindow(o)
    w.root.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+diff.X,startPos.Y.Scale,startPos.Y.Offset+diff.Y)
   end
  end)
- local glyphs={"0","1","7","8","X","ア","+"}
+ -- Inverse Matrix streams: reusable trails with a leading glyph and a fading tail.
+ -- Side streams fall vertically; the top and bottom streams travel along their narrow bezels.
+ -- All characters are dark-on-green. No per-frame Instance creation or unrestricted loops.
+ local glyphs={"0","1","2","3","4","5","6","7","8","9",
+  "ア","イ","ウ","エ","オ","カ","キ","ク","ケ","コ",
+  "サ","シ","ス","セ","ソ","タ","チ","ツ","テ","ト",
+  "ナ","ニ","ヌ","ネ","ノ","ハ","ヒ","フ","ヘ","ホ",
+  "マ","ミ","ム","メ","モ","ヤ","ユ","ヨ","ラ","リ",
+  "ル","レ","ロ","ワ","ヲ","ン"}
+ local charCell=11
  for _,side in ipairs({"top","bottom","left","right"}) do
   local horizontal=side=="top" or side=="bottom"
-  local p=(side=="top" and UDim2.fromOffset(0,0)) or (side=="bottom" and UDim2.new(0,0,1,-pad)) or (side=="left" and UDim2.fromOffset(0,pad)) or UDim2.new(1,-pad,0,pad)
-  local sz=horizontal and UDim2.new(1,0,0,pad) or UDim2.new(0,pad,1,-pad*2)
-  local strip=make("Frame",{Position=p,Size=sz,ClipsDescendants=true,BackgroundTransparency=1,ZIndex=2},w.root)
-  local items={}
-  for i=1,(horizontal and 28 or 17) do
-   local label=make("TextLabel",{Size=UDim2.fromOffset(14,14),BackgroundTransparency=1,Font=Enum.Font.Code,TextSize=12,Text=glyphs[math.random(#glyphs)],ZIndex=3},strip)
-   w:_theme(label,"TextColor3","ink")
-   items[#items+1]={label=label,phase=math.random(),velocity=.45+math.random()*.7}
+  local direction=side=="bottom" and -1 or 1
+  local p=(side=="top" and UDim2.fromOffset(0,0))
+    or (side=="bottom" and UDim2.new(0,0,1,-pad))
+    or (side=="left" and UDim2.fromOffset(0,pad))
+    or UDim2.new(1,-pad,0,pad)
+  local sz=horizontal and UDim2.new(1,0,0,pad)
+    or UDim2.new(0,pad,1,-pad*2)
+  local strip=make("Frame",{
+   Position=p,Size=sz,ClipsDescendants=true,
+   BackgroundTransparency=1,ZIndex=2
+  },w.root)
+  local streams={}
+  for streamIndex=1,(horizontal and 6 or 4) do
+   local len=math.random(4,8)
+   local chars={}
+   for n=1,len do
+    local label=make("TextLabel",{
+     Size=UDim2.fromOffset(charCell,charCell),
+     BackgroundTransparency=1,
+     Font=Enum.Font.Code,TextSize=10,
+     Text=glyphs[math.random(#glyphs)],
+     TextTransparency=math.clamp((n-1)*.16,.04,.94),
+     ZIndex=3,Visible=false
+    },strip)
+    w:_theme(label,"TextColor3","ink")
+    chars[n]=label
+   end
+   streams[#streams+1]={
+    head=-(streamIndex-1)*charCell*10,
+    speed=math.random(35,75),
+    direction=direction,
+    length=len,
+    chars=chars
+   }
   end
-  w._strips[#w._strips+1]={frame=strip,items=items,horizontal=horizontal}
+  w._strips[#w._strips+1]={frame=strip,streams=streams,horizontal=horizontal}
  end
  local accumulator=0
  w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function(dt)
   if w.destroyed or not w.rainEnabled or w.minimized then return end
   accumulator+=dt
-  if accumulator<.1 then return end
-  local elapsed=math.min(accumulator,.3) accumulator=0
-  for _,s in ipairs(w._strips) do
-   for i,entry in ipairs(s.items) do
-    entry.phase=(entry.phase+elapsed*(.1+w.rainSpeed)*entry.velocity)%1
-    entry.label.Visible=math.random()<=w.rainDensity
-    entry.label.Text=glyphs[math.random(#glyphs)]
-    local along=(i-1)/#s.items
-    if s.horizontal then entry.label.Position=UDim2.new((along+entry.phase*.08)%1,0,0,1)
-    else entry.label.Position=UDim2.new(0,2,(along+entry.phase*.08)%1,0) end
+  if accumulator<.08 then return end
+  local elapsed=math.min(accumulator,.2)
+  accumulator=0
+  for _,strip in ipairs(w._strips) do
+   local span=strip.horizontal and strip.frame.AbsoluteSize.X or strip.frame.AbsoluteSize.Y
+   if span>0 then
+    local visibleStreams=math.ceil(#strip.streams*w.rainDensity)
+    for index,stream in ipairs(strip.streams) do
+     stream.head+=stream.speed*elapsed*(.4+w.rainSpeed*1.5)*stream.direction
+     if stream.direction>0 and stream.head>span+stream.length*charCell then
+      stream.head=-stream.length*charCell-math.random(0,70)
+     elseif stream.direction<0 and stream.head<-(stream.length*charCell) then
+      stream.head=span+stream.length*charCell+math.random(0,70)
+     end
+     for n,label in ipairs(stream.chars) do
+      local at=stream.head-(n-1)*charCell*stream.direction
+      label.Visible=index<=visibleStreams and at>=0 and at<span-charCell
+      if label.Visible then
+       if strip.horizontal then
+        label.Position=UDim2.fromOffset(math.floor(at),math.max(0,math.floor((pad-charCell)/2)))
+       else
+        label.Position=UDim2.fromOffset(math.max(0,math.floor((pad-charCell)/2)),math.floor(at))
+       end
+       if n==1 or math.random()<.18 then
+        label.Text=glyphs[math.random(#glyphs)]
+       end
+      end
+     end
+    end
    end
   end
  end)
