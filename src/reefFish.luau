@@ -513,6 +513,264 @@ function Tab:CreateInput(o)
  end)
  w:_register(o.Flag,handle) return handle
 end
+-- A readable paragraph card for long help or diagnostic descriptions.
+function Tab:CreateParagraph(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(math.clamp(tonumber(o.Height) or 82,56,220))
+ local heading=make("TextLabel",{
+  Position=UDim2.fromOffset(9,5),Size=UDim2.new(1,-18,0,23),
+  BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.Code,TextSize=15,Text=tostring(o.Title or "INFORMATION")
+ },f)
+ w:_theme(heading,"TextColor3","accent")
+ local content=make("TextLabel",{
+  Position=UDim2.fromOffset(9,30),Size=UDim2.new(1,-18,1,-36),
+  BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
+  TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
+  Font=Enum.Font.Code,TextSize=13,Text=tostring(o.Content or "")
+ },f)
+ w:_theme(content,"TextColor3","text")
+ local handle={}
+ function handle:Set(title,body)
+  if type(title)=="table" then
+   heading.Text=tostring(title.Title or heading.Text)
+   content.Text=tostring(title.Content or content.Text)
+  else
+   heading.Text=tostring(title or heading.Text)
+   if body~=nil then content.Text=tostring(body) end
+  end
+ end
+ function handle:Get()return {Title=heading.Text,Content=content.Text}end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ return handle
+end
+
+-- Original, self-contained HSV colour picker; no external UI assets.
+-- Supports Color3 or #RRGGBB input, a hue strip, and an SV square.
+function Tab:CreateColorPicker(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(190)
+ local initial=parseColor(o.Default or o.Color) or w.colors.accent
+ local hue,saturation,value=initial:ToHSV()
+ local disabled=false
+ local heading=make("TextLabel",{
+  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.Code,TextSize=14,
+  TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(9,4),Size=UDim2.new(1,-82,0,22)
+ },f)
+ w:_theme(heading,"TextColor3","text")
+ local swatch=make("Frame",{
+  Position=UDim2.new(1,-43,0,7),Size=UDim2.fromOffset(30,18),
+  BackgroundColor3=initial,BorderSizePixel=0
+ },f)
+ round(swatch,3)
+ local picker=make("Frame",{
+  Position=UDim2.fromOffset(9,33),Size=UDim2.new(1,-18,0,98),
+  Active=true,ClipsDescendants=true,BackgroundColor3=Color3.fromHSV(hue,1,1),
+  BorderSizePixel=0
+ },f)
+ round(picker,3)
+ local white=make("Frame",{
+  Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),
+  BorderSizePixel=0,Active=false
+ },picker)
+ make("UIGradient",{
+  Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,0),
+   NumberSequenceKeypoint.new(1,1)
+  })
+ },white)
+ local dark=make("Frame",{
+  Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(0,0,0),
+  BorderSizePixel=0,Active=false
+ },picker)
+ make("UIGradient",{
+  Rotation=90,Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,1),
+   NumberSequenceKeypoint.new(1,0)
+  })
+ },dark)
+ local target=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(9,9),
+  BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
+ },picker)
+ round(target,5)
+ make("UIStroke",{Color=Color3.new(0,0,0),Thickness=1},target)
+ local hueBar=make("Frame",{
+  Position=UDim2.fromOffset(9,139),Size=UDim2.new(1,-18,0,12),
+  BackgroundColor3=Color3.fromRGB(255,0,0),BorderSizePixel=0,Active=true
+ },f)
+ round(hueBar,3)
+ make("UIGradient",{
+  Color=ColorSequence.new({
+   ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+   ColorSequenceKeypoint.new(.17,Color3.fromRGB(255,255,0)),
+   ColorSequenceKeypoint.new(.33,Color3.fromRGB(0,255,0)),
+   ColorSequenceKeypoint.new(.5,Color3.fromRGB(0,255,255)),
+   ColorSequenceKeypoint.new(.67,Color3.fromRGB(0,0,255)),
+   ColorSequenceKeypoint.new(.83,Color3.fromRGB(255,0,255)),
+   ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
+  })
+ },hueBar)
+ local hueMarker=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(4,17),
+  BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
+ },hueBar)
+ local hex=make("TextBox",{
+  Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,25),
+  Text=colorHex(initial),Font=Enum.Font.Code,TextSize=13,
+  ClearTextOnFocus=false,BorderSizePixel=0,
+  BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
+ },f)
+ round(hex,3)
+ local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
+ local function repaint()
+  local c=Color3.fromHSV(hue,saturation,value)
+  picker.BackgroundColor3=Color3.fromHSV(hue,1,1)
+  swatch.BackgroundColor3=c
+  target.Position=UDim2.fromScale(saturation,1-value)
+  hueMarker.Position=UDim2.fromScale(hue,.5)
+  if not hex:IsFocused() then hex.Text=colorHex(c) end
+ end
+ local handle={}
+ function handle:Get()return Color3.fromHSV(hue,saturation,value)end
+ function handle:GetHex()return colorHex(handle:Get())end
+ function handle:Set(c,notify)
+  local parsed=parseColor(c)
+  if not parsed then return false end
+  hue,saturation,value=parsed:ToHSV()
+  repaint()
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,handle:Get())
+  end
+  return true
+ end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  f.BackgroundTransparency=disabled and .45 or 0
+ end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ local dragging=nil
+ local function applyInput(which,pos)
+  if disabled then return end
+  if which=="sv" then
+   saturation=math.clamp((pos.X-picker.AbsolutePosition.X)/math.max(1,picker.AbsoluteSize.X),0,1)
+   value=1-math.clamp((pos.Y-picker.AbsolutePosition.Y)/math.max(1,picker.AbsoluteSize.Y),0,1)
+  else
+   hue=math.clamp((pos.X-hueBar.AbsolutePosition.X)/math.max(1,hueBar.AbsoluteSize.X),0,1)
+  end
+  repaint()
+  if o.Flag then w:_markChanged("game") end
+  fire(o.Callback,handle:Get())
+ end
+ w._connections[#w._connections+1]=picker.InputBegan:Connect(function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   dragging="sv" applyInput(dragging,i.Position)
+  end
+ end)
+ w._connections[#w._connections+1]=hueBar.InputBegan:Connect(function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   dragging="hue" applyInput(dragging,i.Position)
+  end
+ end)
+ w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
+  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+   applyInput(dragging,i.Position)
+  end
+ end)
+ w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   dragging=nil
+  end
+ end)
+ w._connections[#w._connections+1]=hex.Focused:Connect(function()outline.Color=w.colors.accent outline.Transparency=0 end)
+ w._connections[#w._connections+1]=hex.FocusLost:Connect(function()
+  outline.Color=w.colors.muted outline.Transparency=.5
+  if not handle:Set(hex.Text,true) then hex.Text=handle:GetHex() end
+ end)
+ w:_register(o.Flag,handle)
+ repaint()
+ return handle
+end
+
+-- Keybinds use the window's shared input dispatcher rather than one
+-- global InputBegan/InputEnded listener for every keybind.
+function Tab:CreateKeybind(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(43)
+ local mode=o.Mode or "Toggle"
+ if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "Keybind"),Font=Enum.Font.Code,
+  TextSize=14,BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  Position=UDim2.fromOffset(8,0),Size=UDim2.new(.56,-8,1,0)
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local button=make("TextButton",{
+  Size=UDim2.new(.42,-8,0,30),Position=UDim2.new(.58,0,0,7),
+  BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
+  Text="[ NONE ]",Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0
+ },f)
+ round(button,3)
+ local selected=nil
+ local active=false
+ local disabled=false
+ local handle={}
+ local function redraw()
+  button.Text="["..(selected or "NONE").."]"
+ end
+ function handle:Get()return selected or "None"end
+ function handle:Set(candidate,notify)
+  local name=typeof(candidate)=="EnumItem" and candidate.Name or candidate
+  if type(name)~="string" then return false end
+  if name=="None" or name=="" then selected=nil
+  elseif Enum.KeyCode[name] and name~="Unknown" and name~=w.toggleKey.Name then selected=name
+  else return false end
+  active=false
+  redraw()
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.OnChanged,selected)
+  end
+  return true
+ end
+ function handle:SetDisabled(v)disabled=v==true button.TextTransparency=disabled and .6 or 0 end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()
+  if w._bindingCapture==handle then w._bindingCapture=nil end
+  for i=#w._keybinds,1,-1 do if w._keybinds[i]==handle then table.remove(w._keybinds,i) end end
+  f:Destroy()
+ end
+ function handle:_input(down)
+  if disabled or not f.Parent then return end
+  if mode=="Hold" then
+   if active~=down then active=down fire(o.Callback,active,selected) end
+  elseif down and mode=="Press" then
+   fire(o.Callback,true,selected)
+  elseif down then
+   active=not active
+   fire(o.Callback,active,selected)
+  end
+ end
+ w._connections[#w._connections+1]=button.MouseButton1Click:Connect(function()
+  if disabled then return end
+  w._bindingCapture=handle
+  button.Text="[ PRESS KEY ]"
+ end)
+ handle:Set(o.Default or "None")
+ table.insert(w._keybinds,handle)
+ w:_register(o.Flag,handle)
+ redraw()
+ return handle
+end
+
 function Tab:CreateTextArea(o)
  o=o or {}
  local w=self.window
