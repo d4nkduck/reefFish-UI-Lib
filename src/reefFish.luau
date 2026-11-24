@@ -239,7 +239,10 @@ function Tab:CreateSlider(o)
   if type(v)~="number" then return end
   value=math.clamp(min+math.floor(((v-min)/inc)+.5)*inc,min,max)
   render()
-  if notify then w:_markChanged("game") fire(o.Callback,value) end
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,value)
+  end
  end
  local dragging=false
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
@@ -275,7 +278,10 @@ function Tab:CreateDropdown(o)
   if not table.find(opts,v) then return false end
   value=v
   render()
-  if notify then w:_markChanged("game") fire(o.Callback,value) end
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,value)
+  end
   return true
  end
  function handle:SetOptions(nextOptions)
@@ -572,6 +578,8 @@ local function configObject(win,kind)
   if oldName==newName then return true end
   local raw,err=readRaw(oldName)
   if not raw then return false,err end
+  local existing=readRaw(newName)
+  if existing then return false,"Destination profile already exists" end
   if win.fs and type(win.fs.delete)~="function" then
    return false,"Renaming requires filesystem deletion support"
   end
@@ -582,6 +590,98 @@ local function configObject(win,kind)
   return true
  end
  return obj
+end
+function Window:_profileManager(tab,kind,store,onImported)
+ local title=kind=="appearance" and "APPEARANCE PROFILES" or "GAME PROFILES"
+ tab:CreateSection(title)
+ local storageLabel=tab:CreateLabel({Text="Storage: "..(self.StorageMode=="file" and "local files" or "session memory only")})
+ local profile=tab:CreateInput({Name="Profile name",Default="default",Placeholder="Letters, numbers, - and _"})
+ local picker=tab:CreateDropdown({
+  Name="Saved profiles",Options=store:List(),
+  Callback=function(name)profile:Set(name)end
+ })
+ local w=self
+ local function report(action,ok,detail)
+  w:Notify(ok and (action.." succeeded") or (action..": "..tostring(detail)),ok and "OK" or "ERROR")
+ end
+ local function refresh(selected)
+  picker:SetOptions(store:List())
+  if selected then picker:Set(selected) end
+ end
+ tab:CreateButton({Name="Save named profile",Callback=function()
+  local name=profile:Get()
+  local ok,why=store:Save(name)
+  if ok then
+   refresh(name)
+   if w._autosaveTargets[kind] then w._autosaveTargets[kind]=name end
+  end
+  report("Save",ok,why)
+ end})
+ tab:CreateButton({Name="Load named profile",Callback=function()
+  local name=profile:Get()
+  -- Import applies control values without running user callbacks.
+  local ok,why=store:Load(name)
+  if ok and onImported then onImported() end
+  report("Load",ok,why)
+ end})
+ tab:CreateButton({Name="Rename selected profile",Callback=function()
+  local source=picker:Get()
+  if not source then w:Notify("Select a saved profile first","WARN") return end
+  local dest=profile:Get()
+  local ok,why=store:Rename(source,dest)
+  if ok then
+   refresh(dest)
+   if w._autosaveTargets[kind]==source then w._autosaveTargets[kind]=dest end
+  end
+  report("Rename",ok,why)
+ end})
+ local confirmName,confirmUntil
+ tab:CreateButton({Name="Delete selected profile (confirm twice)",Callback=function()
+  local target=picker:Get()
+  if not target then w:Notify("No saved profile selected","WARN") return end
+  if confirmName~=target or os.clock()>(confirmUntil or 0) then
+   confirmName=target
+   confirmUntil=os.clock()+5
+   w:Notify("Click Delete again within 5 seconds to remove "..target,"WARN")
+   return
+  end
+  confirmName=nil
+  local ok,why=store:Delete(target)
+  if ok then
+   refresh()
+   if w._autosaveTargets[kind]==target then w._autosaveTargets[kind]=nil end
+  end
+  report("Delete",ok,why)
+ end})
+ tab:CreateToggle({Name="Auto-save selected profile (this session)",Default=false,Callback=function(enabled)
+  local name=profile:Get()
+  if enabled and not validName(name) then
+   w:Notify("Enter a valid profile name first","WARN")
+   return
+  end
+  w._autosaveTargets[kind]=enabled and name or nil
+  w._autosaveDue[kind]=nil
+  w:Notify(enabled and ("Auto-save to "..name.." enabled") or "Auto-save disabled","INFO")
+ end})
+ tab:CreateSection("JSON IMPORT / EXPORT")
+ local payload=tab:CreateTextArea({Name="Profile JSON",Height=125,Placeholder="Exported JSON appears here. Paste JSON here to import."})
+ tab:CreateButton({Name="Export values to JSON",Callback=function()
+  local ok,value=pcall(function()return store:Export()end)
+  if not ok then w:Notify("Export failed: "..tostring(value),"ERROR") return end
+  payload:Set(value)
+  if type(setclipboard)=="function" then
+   local copied=pcall(setclipboard,value)
+   w:Notify(copied and "JSON exported and copied" or "JSON exported into text field",copied and "OK" or "INFO")
+  else
+   w:Notify("JSON exported into text field","OK")
+  end
+ end})
+ tab:CreateButton({Name="Import values from JSON",Callback=function()
+  local ok,why=store:Import(payload:Get())
+  if ok and onImported then onImported() end
+  report("Import",ok,why)
+ end})
+ return {Refresh=refresh,Selected=picker,Name=profile}
 end
 function Lib:CreateWindow(o)
  o=o or {}
@@ -760,17 +860,58 @@ function Lib:CreateWindow(o)
  end)
  w.Config=configObject(w,"game")
  w.Appearance=configObject(w,"appearance")
+ -- Centralized 1-second debounce. No new tasks on each slider change.
+ w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function()
+  if w.destroyed then return end
+  local now=os.clock()
+  for kind,due in pairs(w._autosaveDue) do
+   if due and now>=due then
+    w._autosaveDue[kind]=nil
+    local name=w._autosaveTargets[kind]
+    if name then
+     local manager=kind=="appearance" and w.Appearance or w.Config
+     local ok,err=manager:Save(name)
+     if not ok then w:Notify("Auto-save failed: "..tostring(err),"ERROR") end
+    end
+   end
+  end
+ end)
  if not o.HideBuiltins then
   local appearance=w:CreateTab({Name="APPEARANCE"})
   appearance:CreateSection("CONSOLE STYLE")
-  appearance:CreateDropdown({Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},Default=w.themeName,Callback=function(v)w:SetTheme(v)end})
-  appearance:CreateToggle({Name="Matrix rain",Default=true,Callback=function(v)w:SetRain(v)end})
-  appearance:CreateButton({Name="Save appearance",Callback=function()local ok,why=w.Appearance:Save("default")w:Notify(why,ok and "ok" or "error")end})
-  appearance:CreateButton({Name="Load appearance",Callback=function()local ok,why=w.Appearance:Load("default")w:Notify(ok and "Appearance loaded" or why,ok and "ok" or "error")end})
+  local theme=appearance:CreateDropdown({
+   Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},
+   Default=w.themeName,Callback=function(value)w:SetTheme(value)end
+  })
+  local rain=appearance:CreateToggle({
+   Name="Matrix rain",Default=w.rainEnabled,
+   Callback=function(value)w:SetRain(value)end
+  })
+  local density=appearance:CreateSlider({
+   Name="Rain density (%)",Min=0,Max=100,Increment=5,
+   Default=math.floor(w.rainDensity*100+.5),
+   Callback=function(value)w:SetRain(w.rainEnabled,value/100,w.rainSpeed)end
+  })
+  local speed=appearance:CreateSlider({
+   Name="Rain speed (%)",Min=0,Max=100,Increment=5,
+   Default=math.floor(w.rainSpeed*100+.5),
+   Callback=function(value)w:SetRain(w.rainEnabled,w.rainDensity,value/100)end
+  })
+  local border=appearance:CreateSlider({
+   Name="Border thickness",Min=9,Max=16,Increment=1,Default=w.borderThickness,
+   Callback=function(value)w:SetBorderThickness(value)end
+  })
+  local function syncAppearance()
+   theme:Set(w.themeName)
+   rain:Set(w.rainEnabled)
+   density:Set(math.floor(w.rainDensity*100+.5))
+   speed:Set(math.floor(w.rainSpeed*100+.5))
+   border:Set(w.borderThickness)
+  end
+  w:_profileManager(appearance,"appearance",w.Appearance,syncAppearance)
   local config=w:CreateTab({Name="CONFIG"})
-  config:CreateSection("GAME SETTINGS")
-  config:CreateButton({Name="Save default profile",Callback=function()local ok,why=w.Config:Save("default")w:Notify(why,ok and "ok" or "error")end})
-  config:CreateButton({Name="Load default profile",Callback=function()local ok,why=w.Config:Load("default")w:Notify(ok and "Loaded" or why,ok and "ok" or "error")end})
+  config:CreateLabel({Text="Profiles are isolated by game.GameId. Loading restores values, not callbacks."})
+  w:_profileManager(config,"game",w.Config)
  end
  return w
 end
