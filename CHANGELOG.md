@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3-alpha — Vertical rain field and uncached diagnostic build
+
+- Replaced per-glyph position updates with one multiline rich-text label per falling column.
+- Full-window vertical code streams are masked by the central panel and exposed in the bezel only.
+- Global background drift is extremely slow, moving right at 0.18–0.48 pixels/second; the main movement is always down.
+- Added persistent visible version markers and the distinct `dist/reefFish-v0.1.3.lua` entry point.
+- Reduced the per-frame UI-object update overhead and preserved searching dropdowns.
+
 ## 0.1.2-alpha — Unified vertical Matrix rain
 
 - Replaced edge-specific motion with a single masked falling-code backdrop.
