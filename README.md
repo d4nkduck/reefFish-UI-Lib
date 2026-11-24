@@ -1,6 +1,6 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.1.1-alpha  
+**Version:** 0.1.2-alpha  
 **License:** MIT  
 **Status:** Iterating alpha — redesigned animation and dropdowns
 
@@ -11,7 +11,7 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 ## What works today
 
 - Draggable console window, minimize and close buttons, status line, notification banner
-- Slim (12 px default, configurable 9–16 px) inverse-Matrix bezel with katakana/digit head-and-tail streams, updated at up to ~12.5 Hz
+- Slim (12 px default, configurable 9–16 px) inverse-Matrix bezel revealing a single vertical falling-code field that slowly scrolls right, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
 - UI controls: tabs, sections, labels, buttons, toggles, sliders, **searchable popup dropdowns**, text inputs
 - Built-in Appearance and Config tabs (unless disabled)
@@ -127,3 +127,12 @@ Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`
 - Dropdown controls open a searchable, scrolling option list. Use `Dropdown:SetOptions({...})` to refresh choices.
 - Reloading a window attempts to clean up the previous tracked instance before constructing a new one.
 - As with earlier alpha versions, test with your own client version; this release is not verified against every third-party execution environment.
+
+## v0.1.2-alpha Matrix background update
+
+- A **single full-window Matrix field** replaces separate animations for each border side. All code trails fall vertically; no streams run around the window edges.
+- The opaque inner content panel masks the background, exposing it only through the green border.
+- The entire field drifts slowly to the **right** while individual columns fall independently, wrapping seamlessly across the full-width field.
+- Each trail includes changing digits/katakana, a darker leading character, and fading tail; the animation uses pooled labels and a capped 10 Hz update loop.
+- Searchable dropdowns and other controls remain available.
+- This release has not been visually validated in Roblox/Xeno; please test the updated loader.
