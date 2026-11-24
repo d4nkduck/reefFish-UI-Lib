@@ -1,10 +1,11 @@
--- reefFish UI Lib v0.2.0-alpha
+-- reefFish UI Lib v0.3.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.2.0-alpha"}
+local TweenService=game:GetService("TweenService")
+local Lib={Version="0.3.0-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -22,6 +23,55 @@ end
 local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 4)},x) end
 local function fire(fn,...)
  if type(fn)=="function" then local ok,err=pcall(fn,...) if not ok then warn("[reefFish]",err) end end
+end
+
+local function colorHex(color)
+ return string.format("#%02X%02X%02X",
+  math.floor(color.R*255+.5),math.floor(color.G*255+.5),math.floor(color.B*255+.5))
+end
+local function parseColor(value)
+ if typeof(value)=="Color3" then return value end
+ if type(value)=="string" then
+  local h=value:gsub("#","")
+  if #h==6 and h:match("^[0-9a-fA-F]+$") then
+   return Color3.fromRGB(tonumber(h:sub(1,2),16),tonumber(h:sub(3,4),16),tonumber(h:sub(5,6),16))
+  end
+ end
+ return nil
+end
+local function packValue(v)
+ if typeof(v)=="Color3" then
+  return {__reefFishType="Color3",R=v.R,G=v.G,B=v.B}
+ end
+ if type(v)=="boolean" or type(v)=="string" or type(v)=="number" then return v end
+ if type(v)=="table" then
+  local out={}
+  if #v>100 then return nil end
+  for i,item in ipairs(v) do
+   if type(item)~="string" then return nil end
+   out[i]=item
+  end
+  return out
+ end
+ return nil
+end
+local function unpackValue(v)
+ if type(v)=="table" then
+  if v.__reefFishType=="Color3" then
+   if type(v.R)~="number" or type(v.G)~="number" or type(v.B)~="number" then return nil end
+   if v.R~=v.R or v.G~=v.G or v.B~=v.B then return nil end
+   return Color3.new(math.clamp(v.R,0,1),math.clamp(v.G,0,1),math.clamp(v.B,0,1))
+  end
+  if v.__reefFishType~=nil or #v>100 then return nil end
+  local out={}
+  for i,item in ipairs(v) do
+   if type(item)~="string" then return nil end
+   out[i]=item
+  end
+  return out
+ end
+ if type(v)=="boolean" or type(v)=="string" or type(v)=="number" then return v end
+ return nil
 end
 local function validName(n)
  return type(n)=="string" and #n>0 and #n<=48 and n:match("^[%w_%-]+$")~=nil
@@ -89,11 +139,23 @@ end
 function Window:SetTheme(name)
  if not palettes[name] then return false end
  if self._closeDropdown then self._closeDropdown() end
- self.themeName=name self.colors=palettes[name]
+ self.themeName=name self.colors=table.clone(palettes[name])
  for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
  for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
  if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
+ self:_markChanged("appearance")
+ return true
+end
+
+function Window:SetAccentColor(value)
+ local color=parseColor(value)
+ if not color then return false end
+ self.colors.accent=color
+ for _,bound in ipairs(self._bound) do
+  if bound[3]=="accent" and bound[1].Parent then bound[1][bound[2]]=color end
+ end
+ for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
  self:_markChanged("appearance")
  return true
 end
@@ -105,8 +167,67 @@ function Window:SetRain(enabled,density,speed)
  if self._rainColumns and self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
 end
+-- Small capped toast queue with a timed dismissal.
+function Window:Toast(info)
+ info=type(info)=="table" and info or {Content=tostring(info)}
+ if self.destroyed or not self._toastLayer then return nil end
+ local title=tostring(info.Title or "REEFFISH")
+ local content=tostring(info.Content or info.Message or "")
+ local duration=math.clamp(tonumber(info.Duration) or 4,1,15)
+ if #self._toasts>=4 then
+  local oldest=table.remove(self._toasts,1)
+  if oldest and oldest.Parent then oldest:Destroy() end
+ end
+ local frame=make("Frame",{
+  Size=UDim2.new(1,0,0,58),BackgroundColor3=self.colors.panel,
+  BackgroundTransparency=1,BorderSizePixel=0,ZIndex=180
+ },self._toastLayer)
+ round(frame,4)
+ make("UIStroke",{Color=self.colors.border,Thickness=1,Transparency=.2},frame)
+ local heading=make("TextLabel",{
+  Text="> "..title,TextColor3=self.colors.accent,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(8,3),Size=UDim2.new(1,-26,0,22),
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=13,
+  TextTransparency=1,ZIndex=181
+ },frame)
+ local body=make("TextLabel",{
+  Text=content,TextColor3=self.colors.text,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(8,23),Size=UDim2.new(1,-16,0,31),
+  TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
+  TextWrapped=true,Font=Enum.Font.Code,TextSize=12,TextTransparency=1,ZIndex=181
+ },frame)
+ local close=make("TextButton",{
+  Text="×",TextColor3=self.colors.muted,BackgroundTransparency=1,
+  Position=UDim2.new(1,-25,0,1),Size=UDim2.fromOffset(23,22),
+  Font=Enum.Font.Code,TextSize=16,ZIndex=182
+ },frame)
+ table.insert(self._toasts,frame)
+ local function dismiss()
+  if not frame.Parent then return end
+  for i=#self._toasts,1,-1 do if self._toasts[i]==frame then table.remove(self._toasts,i) end end
+  TweenService:Create(frame,TweenInfo.new(.16),{BackgroundTransparency=1}):Play()
+  TweenService:Create(heading,TweenInfo.new(.16),{TextTransparency=1}):Play()
+  TweenService:Create(body,TweenInfo.new(.16),{TextTransparency=1}):Play()
+  task.delay(.18,function()if frame.Parent then frame:Destroy() end end)
+ end
+ close.MouseButton1Click:Connect(dismiss)
+ TweenService:Create(frame,TweenInfo.new(.2),{BackgroundTransparency=.05}):Play()
+ TweenService:Create(heading,TweenInfo.new(.2),{TextTransparency=0}):Play()
+ TweenService:Create(body,TweenInfo.new(.2),{TextTransparency=.05}):Play()
+ task.delay(duration,dismiss)
+ return {Dismiss=dismiss}
+end
 function Window:Notify(msg,kind)
  self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
+ if self.enableToasts then
+  self:Toast({Title=kind or "INFO",Content=tostring(msg),Duration=3.5})
+ end
+end
+function Window:SetHidden(value)
+ self.hidden=value==true
+ if self._closeDropdown then self._closeDropdown() end
+ self.screen.Enabled=not self.hidden
+ return self.hidden
 end
 function Window:SetMinimized(value)
  self.minimized=value==true
@@ -125,6 +246,7 @@ function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
+ self._bindingCapture=nil
  -- Flush any queued autosaves before disconnecting.
  for kind,due in pairs(self._autosaveDue) do
   local name=self._autosaveTargets[kind]
@@ -170,7 +292,12 @@ function Tab:CreateLabel(o)
  local f=self:_base(32)
  local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(8,0),Size=UDim2.new(1,-16,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=14,TextWrapped=true},f)
  self.window:_theme(l,"TextColor3","text")
- return {SetText=function(_,v)l.Text=tostring(v)end}
+ return {
+  SetText=function(_,v)l.Text=tostring(v)end,
+  Get=function()return l.Text end,
+  SetVisible=function(_,v)f.Visible=v~=false end,
+  Destroy=function()f:Destroy()end
+ }
 end
 function Tab:CreateButton(o)
  local w=self.window
@@ -180,7 +307,11 @@ function Tab:CreateButton(o)
  w:_feedback(b,f)
  local disabled=false
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
- return {SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end}
+ return {
+  SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end,
+  SetVisible=function(_,v)f.Visible=v~=false end,
+  Destroy=function()f:Destroy()end
+ }
 end
 function Tab:CreateToggle(o)
  local w=self.window
@@ -189,8 +320,12 @@ function Tab:CreateToggle(o)
  local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(b,"TextColor3","text")
  w:_feedback(b,f)
+ local disabled=false
  local function render()b.Text="  ["..(value and "X" or " ").."] "..tostring(o.Name or "Toggle")end
  local handle={}
+ function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  function handle:Get()return value end
  function handle:Set(v,notify)
   if type(v)~="boolean" then return false end
@@ -203,7 +338,9 @@ function Tab:CreateToggle(o)
   return true
  end
  w:_register(o.Flag,handle)
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()handle:Set(not value,true)end)
+ w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
+  if not disabled then handle:Set(not value,true) end
+ end)
  render() return handle
 end
 function Tab:CreateSlider(o)
@@ -228,6 +365,10 @@ function Tab:CreateSlider(o)
  w:_theme(thumb,"BackgroundColor3","accent")
  round(thumb,7)
  local handle={}
+ local disabled=false
+ function handle:SetDisabled(v)disabled=v==true f.BackgroundTransparency=disabled and .5 or 0 end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  local function render()
   name.Text=tostring(o.Name or "Slider").."  "..tostring(value)
   local progress=(value-min)/(max-min)
@@ -246,13 +387,13 @@ function Tab:CreateSlider(o)
  end
  local dragging=false
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true end
+  if not disabled and (i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch) then dragging=true end
  end)
  w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
  end)
  w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+  if not disabled and dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
    handle:Set(min+math.clamp((i.Position.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)*(max-min),true)
   end
  end)
@@ -263,8 +404,20 @@ function Tab:CreateDropdown(o)
  o=o or {}
  local w=self.window
  local f=self:_base(70)
+
  local opts=o.Options or {}
- local value=table.find(opts,o.Default) and o.Default or opts[1]
+ local multi=o.Multi==true
+ local value
+ if multi then
+  value={}
+  if type(o.Default)=="table" then
+   for _,entry in ipairs(o.Default) do
+    if table.find(opts,entry) and not table.find(value,entry) then table.insert(value,entry) end
+   end
+  end
+ else
+  value=table.find(opts,o.Default) and o.Default or opts[1]
+ end
  local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
  local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0,AutoButtonColor=false},f)
@@ -272,27 +425,59 @@ function Tab:CreateDropdown(o)
  w:_theme(b,"BackgroundColor3","panel")
  w:_feedback(b,f)
  local handle={}
- local function render() b.Text=tostring(value or "Select...").."  ▾" end
- function handle:Get() return value end
+ local disabled=false
+ function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetVisible(v)
+  f.Visible=v~=false
+  if not f.Visible and w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
+ end
+ function handle:Destroy()
+  if w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
+  f:Destroy()
+ end
+ local function render()
+  if multi then b.Text=(#value==0 and "Select..." or table.concat(value,", ")).."  ▾"
+  else b.Text=tostring(value or "Select...").."  ▾" end
+ end
+ function handle:Get()
+  if not multi then return value end
+  return table.clone(value)
+ end
  function handle:Set(v,notify)
-  if not table.find(opts,v) then return false end
-  value=v
+  if multi then
+   if type(v)~="table" or #v>100 then return false end
+   local selected={}
+   for _,entry in ipairs(v) do
+    if type(entry)~="string" or not table.find(opts,entry) then return false end
+    if not table.find(selected,entry) then table.insert(selected,entry) end
+   end
+   value=selected
+  else
+   if not table.find(opts,v) then return false end
+   value=v
+  end
   render()
   if notify then
    if o.Flag then w:_markChanged("game") end
-   fire(o.Callback,value)
+   fire(o.Callback,handle:Get())
   end
   return true
  end
  function handle:SetOptions(nextOptions)
   if type(nextOptions)~="table" then return end
   opts=nextOptions
-  if not table.find(opts,value) then value=opts[1] end
+  if multi then
+   local selected={}
+   for _,entry in ipairs(value) do
+    if table.find(opts,entry) then table.insert(selected,entry) end
+   end
+   value=selected
+  elseif not table.find(opts,value) then value=opts[1] end
   render()
   if w._closeDropdown then w._closeDropdown() end
  end
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
-  if w.destroyed then return end
+  if w.destroyed or disabled then return end
   if w._dropdownOwner==b and w._closeDropdown then
    w._closeDropdown()
    return
@@ -341,7 +526,7 @@ function Tab:CreateDropdown(o)
     if query=="" or string.find(string.lower(label),query,1,true) then
      local chosen=option
      local item=make("TextButton",{
-      Text=(chosen==value and "✓  " or "   ")..label,
+      Text=((multi and table.find(value,chosen)~=nil or chosen==value) and "✓  " or "   ")..label,
       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
       TextColor3=chosen==value and w.colors.accent or w.colors.text,
       BorderSizePixel=0,Font=Enum.Font.Code,TextSize=13,
@@ -350,8 +535,16 @@ function Tab:CreateDropdown(o)
      round(item,3)
      optionButtons[#optionButtons+1]=item
      item.MouseButton1Click:Connect(function()
-      handle:Set(chosen,true)
-      if w._closeDropdown then w._closeDropdown() end
+      if multi then
+       local nextValue=table.clone(value)
+       local index=table.find(nextValue,chosen)
+       if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
+       handle:Set(nextValue,true)
+       updateList()
+      else
+       handle:Set(chosen,true)
+       if w._closeDropdown then w._closeDropdown() end
+      end
      end)
     end
    end
@@ -377,6 +570,11 @@ function Tab:CreateDropdown(o)
  render()
  return handle
 end
+function Tab:CreateMultiDropdown(o)
+ o=o or {}
+ o.Multi=true
+ return self:CreateDropdown(o)
+end
 function Tab:CreateInput(o)
  local w=self.window
  local f=self:_base(64)
@@ -389,6 +587,9 @@ function Tab:CreateInput(o)
   outline.Color=w.colors.accent outline.Transparency=0
  end)
  local handle={}
+ function handle:SetDisabled(v)box.TextEditable=v~=true end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  function handle:Get()return box.Text end
  function handle:Set(v,notify)
   if o.Numeric and tonumber(v)==nil then return end
@@ -404,6 +605,308 @@ function Tab:CreateInput(o)
  end)
  w:_register(o.Flag,handle) return handle
 end
+-- A readable paragraph card for long help or diagnostic descriptions.
+function Tab:CreateParagraph(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(math.clamp(tonumber(o.Height) or 82,56,220))
+ local heading=make("TextLabel",{
+  Position=UDim2.fromOffset(9,5),Size=UDim2.new(1,-18,0,23),
+  BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.Code,TextSize=15,Text=tostring(o.Title or "INFORMATION")
+ },f)
+ w:_theme(heading,"TextColor3","accent")
+ local content=make("TextLabel",{
+  Position=UDim2.fromOffset(9,30),Size=UDim2.new(1,-18,1,-36),
+  BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
+  TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
+  Font=Enum.Font.Code,TextSize=13,Text=tostring(o.Content or "")
+ },f)
+ w:_theme(content,"TextColor3","text")
+ local handle={}
+ function handle:Set(title,body)
+  if type(title)=="table" then
+   heading.Text=tostring(title.Title or heading.Text)
+   content.Text=tostring(title.Content or content.Text)
+  else
+   heading.Text=tostring(title or heading.Text)
+   if body~=nil then content.Text=tostring(body) end
+  end
+ end
+ function handle:Get()return {Title=heading.Text,Content=content.Text}end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ return handle
+end
+
+-- Original, self-contained HSV colour picker; no external UI assets.
+-- Supports Color3 or #RRGGBB input, a hue strip, and an SV square.
+function Tab:CreateColorPicker(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(230)
+ local initial=parseColor(o.Default or o.Color) or w.colors.accent
+ local hue,saturation,value=initial:ToHSV()
+ local disabled=false
+ local heading=make("TextLabel",{
+  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.Code,TextSize=14,
+  TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(9,4),Size=UDim2.new(1,-82,0,22)
+ },f)
+ w:_theme(heading,"TextColor3","text")
+ local swatch=make("Frame",{
+  Position=UDim2.new(1,-43,0,7),Size=UDim2.fromOffset(30,18),
+  BackgroundColor3=initial,BorderSizePixel=0
+ },f)
+ round(swatch,3)
+ local picker=make("Frame",{
+  Position=UDim2.fromOffset(9,33),Size=UDim2.new(1,-18,0,98),
+  Active=true,ClipsDescendants=true,BackgroundColor3=Color3.fromHSV(hue,1,1),
+  BorderSizePixel=0
+ },f)
+ round(picker,3)
+ local white=make("Frame",{
+  Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),
+  BorderSizePixel=0,Active=false
+ },picker)
+ make("UIGradient",{
+  Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,0),
+   NumberSequenceKeypoint.new(1,1)
+  })
+ },white)
+ local dark=make("Frame",{
+  Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(0,0,0),
+  BorderSizePixel=0,Active=false
+ },picker)
+ make("UIGradient",{
+  Rotation=90,Transparency=NumberSequence.new({
+   NumberSequenceKeypoint.new(0,1),
+   NumberSequenceKeypoint.new(1,0)
+  })
+ },dark)
+ local target=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(9,9),
+  BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
+ },picker)
+ round(target,5)
+ make("UIStroke",{Color=Color3.new(0,0,0),Thickness=1},target)
+ local hueBar=make("Frame",{
+  Position=UDim2.fromOffset(9,139),Size=UDim2.new(1,-18,0,12),
+  BackgroundColor3=Color3.fromRGB(255,0,0),BorderSizePixel=0,Active=true
+ },f)
+ round(hueBar,3)
+ make("UIGradient",{
+  Color=ColorSequence.new({
+   ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
+   ColorSequenceKeypoint.new(.17,Color3.fromRGB(255,255,0)),
+   ColorSequenceKeypoint.new(.33,Color3.fromRGB(0,255,0)),
+   ColorSequenceKeypoint.new(.5,Color3.fromRGB(0,255,255)),
+   ColorSequenceKeypoint.new(.67,Color3.fromRGB(0,0,255)),
+   ColorSequenceKeypoint.new(.83,Color3.fromRGB(255,0,255)),
+   ColorSequenceKeypoint.new(1,Color3.fromRGB(255,0,0))
+  })
+ },hueBar)
+ local hueMarker=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(4,17),
+  BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
+ },hueBar)
+ local hex=make("TextBox",{
+  Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,25),
+  Text=colorHex(initial),Font=Enum.Font.Code,TextSize=13,
+  ClearTextOnFocus=false,BorderSizePixel=0,
+  BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
+ },f)
+ round(hex,3)
+ local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
+ local rgbFields={}
+ for channel,name in ipairs({"R","G","B"}) do
+  local x=9+(channel-1)*76
+  local caption=make("TextLabel",{
+   Position=UDim2.fromOffset(x,191),Size=UDim2.fromOffset(16,25),
+   BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
+   Font=Enum.Font.Code,TextSize=12
+  },f)
+  local field=make("TextBox",{
+   Position=UDim2.fromOffset(x+18,191),Size=UDim2.fromOffset(50,25),
+   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
+   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0,
+   ClearTextOnFocus=false,Text="0"
+  },f)
+  round(field,3)
+  rgbFields[channel]=field
+ end
+ local function repaint()
+  local c=Color3.fromHSV(hue,saturation,value)
+  picker.BackgroundColor3=Color3.fromHSV(hue,1,1)
+  swatch.BackgroundColor3=c
+  target.Position=UDim2.fromScale(saturation,1-value)
+  hueMarker.Position=UDim2.fromScale(hue,.5)
+  if not hex:IsFocused() then hex.Text=colorHex(c) end
+  local channels={c.R,c.G,c.B}
+  for i,field in ipairs(rgbFields) do
+   if not field:IsFocused() then field.Text=tostring(math.floor(channels[i]*255+.5)) end
+  end
+ end
+ local handle={}
+ function handle:Get()return Color3.fromHSV(hue,saturation,value)end
+ function handle:GetHex()return colorHex(handle:Get())end
+ function handle:GetRGB()
+  local c=handle:Get()
+  return math.floor(c.R*255+.5),math.floor(c.G*255+.5),math.floor(c.B*255+.5)
+ end
+ function handle:SetRGB(r,g,b,notify)
+  if type(r)~="number" or type(g)~="number" or type(b)~="number" then return false end
+  return handle:Set(Color3.fromRGB(math.clamp(math.floor(r+.5),0,255),
+   math.clamp(math.floor(g+.5),0,255),math.clamp(math.floor(b+.5),0,255)),notify)
+ end
+ function handle:Set(c,notify)
+  local parsed=parseColor(c)
+  if not parsed then return false end
+  hue,saturation,value=parsed:ToHSV()
+  repaint()
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,handle:Get())
+  end
+  return true
+ end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  f.BackgroundTransparency=disabled and .45 or 0
+ end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ local dragging=nil
+ local function applyInput(which,pos)
+  if disabled then return end
+  if which=="sv" then
+   saturation=math.clamp((pos.X-picker.AbsolutePosition.X)/math.max(1,picker.AbsoluteSize.X),0,1)
+   value=1-math.clamp((pos.Y-picker.AbsolutePosition.Y)/math.max(1,picker.AbsoluteSize.Y),0,1)
+  else
+   hue=math.clamp((pos.X-hueBar.AbsolutePosition.X)/math.max(1,hueBar.AbsoluteSize.X),0,1)
+  end
+  repaint()
+  if o.Flag then w:_markChanged("game") end
+  fire(o.Callback,handle:Get())
+ end
+ w._connections[#w._connections+1]=picker.InputBegan:Connect(function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   dragging="sv" applyInput(dragging,i.Position)
+  end
+ end)
+ w._connections[#w._connections+1]=hueBar.InputBegan:Connect(function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   dragging="hue" applyInput(dragging,i.Position)
+  end
+ end)
+ w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
+  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+   applyInput(dragging,i.Position)
+  end
+ end)
+ w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   dragging=nil
+  end
+ end)
+ w._connections[#w._connections+1]=hex.Focused:Connect(function()outline.Color=w.colors.accent outline.Transparency=0 end)
+ w._connections[#w._connections+1]=hex.FocusLost:Connect(function()
+  outline.Color=w.colors.muted outline.Transparency=.5
+  if not handle:Set(hex.Text,true) then hex.Text=handle:GetHex() end
+ end)
+ for _,field in ipairs(rgbFields) do
+  w._connections[#w._connections+1]=field.FocusLost:Connect(function()
+   local rgb={}
+   for i,box in ipairs(rgbFields) do rgb[i]=tonumber(box.Text) end
+   if rgb[1] and rgb[2] and rgb[3] then
+    handle:SetRGB(rgb[1],rgb[2],rgb[3],true)
+   else
+    repaint()
+   end
+  end)
+ end
+ w:_register(o.Flag,handle)
+ repaint()
+ return handle
+end
+
+-- Keybinds use the window's shared input dispatcher rather than one
+-- global InputBegan/InputEnded listener for every keybind.
+function Tab:CreateKeybind(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(43)
+ local mode=o.Mode or "Toggle"
+ if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "Keybind"),Font=Enum.Font.Code,
+  TextSize=14,BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  Position=UDim2.fromOffset(8,0),Size=UDim2.new(.56,-8,1,0)
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local button=make("TextButton",{
+  Size=UDim2.new(.42,-8,0,30),Position=UDim2.new(.58,0,0,7),
+  BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
+  Text="[ NONE ]",Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0
+ },f)
+ round(button,3)
+ local selected=nil
+ local active=false
+ local disabled=false
+ local handle={}
+ local function redraw()
+  button.Text="["..(selected or "NONE").."]"
+ end
+ function handle:Get()return selected or "None"end
+ function handle:Set(candidate,notify)
+  local name=typeof(candidate)=="EnumItem" and candidate.Name or candidate
+  if type(name)~="string" then return false end
+  if name=="None" or name=="" then selected=nil
+  else
+   local okKey,key=pcall(function()return Enum.KeyCode[name]end)
+   if not okKey or not key or name=="Unknown" or name==w.toggleKey.Name then return false end
+   selected=name
+  end
+  active=false
+  redraw()
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.OnChanged,selected)
+  end
+  return true
+ end
+ function handle:SetDisabled(v)disabled=v==true button.TextTransparency=disabled and .6 or 0 end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()
+  if w._bindingCapture==handle then w._bindingCapture=nil end
+  for i=#w._keybinds,1,-1 do if w._keybinds[i]==handle then table.remove(w._keybinds,i) end end
+  f:Destroy()
+ end
+ function handle:_input(down)
+  if disabled or not f.Parent then return end
+  if mode=="Hold" then
+   if active~=down then active=down fire(o.Callback,active,selected) end
+  elseif down and mode=="Press" then
+   fire(o.Callback,true,selected)
+  elseif down then
+   active=not active
+   fire(o.Callback,active,selected)
+  end
+ end
+ w._connections[#w._connections+1]=button.MouseButton1Click:Connect(function()
+  if disabled then return end
+  w._bindingCapture=handle
+  button.Text="[ PRESS KEY ]"
+ end)
+ handle:Set(o.Default or "None")
+ table.insert(w._keybinds,handle)
+ w:_register(o.Flag,handle)
+ redraw()
+ return handle
+end
+
 function Tab:CreateTextArea(o)
  o=o or {}
  local w=self.window
@@ -435,6 +938,9 @@ function Tab:CreateTextArea(o)
  local handle={}
  function handle:Get()return box.Text end
  function handle:Set(v)box.Text=tostring(v or "")end
+ function handle:SetDisabled(v)box.TextEditable=v~=true end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  return handle
 end
 function Window:_register(flag,handle)
@@ -504,15 +1010,14 @@ local function configObject(win,kind)
    return HttpService:JSONEncode({
     version=1,theme=win.themeName,rain=win.rainEnabled,
     density=win.rainDensity,speed=win.rainSpeed,
-    borderThickness=win.borderThickness
+    borderThickness=win.borderThickness,
+    accent=packValue(win.colors.accent)
    })
   end
   local flags={}
   for name,control in pairs(win.flags) do
-   local value=control:Get()
-   if type(value)=="boolean" or type(value)=="string" or type(value)=="number" then
-    flags[name]=value
-   end
+   local value=packValue(control:Get())
+   if value~=nil then flags[name]=value end
   end
   return HttpService:JSONEncode({version=1,gameId=game.GameId,flags=flags})
  end
@@ -532,6 +1037,7 @@ local function configObject(win,kind)
    if kind=="appearance" then
     if type(data.theme)=="string" then win:SetTheme(data.theme) end
     if type(data.borderThickness)=="number" then win:SetBorderThickness(data.borderThickness) end
+    if data.accent then win:SetAccentColor(unpackValue(data.accent)) end
     if type(data.rain)=="boolean" then
      win:SetRain(data.rain,data.density,data.speed)
     elseif type(data.density)=="number" or type(data.speed)=="number" then
@@ -540,8 +1046,9 @@ local function configObject(win,kind)
    else
     for flag,value in pairs(data.flags) do
      local ctl=win.flags[flag]
-     if ctl and (type(value)=="boolean" or type(value)=="string" or type(value)=="number") then
-      ctl:Set(value,options and options.FireCallbacks==true)
+     if ctl then
+      local decoded=unpackValue(value)
+      if decoded~=nil then ctl:Set(decoded,options and options.FireCallbacks==true) end
      end
     end
    end
@@ -687,15 +1194,20 @@ function Lib:CreateWindow(o)
  o=o or {}
  local player=Players.LocalPlayer
  assert(player,"reefFish must run in a client LocalScript")
- local colors=palettes[o.Theme] or palettes.MatrixInverse
+ local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
  local w=setmetatable({
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
   rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
+  _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
   fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
+ local requestedKey=o.ToggleKey or "RightShift"
+ if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
+ local okKey,enumKey=pcall(function()return Enum.KeyCode[requestedKey]end)
+ w.toggleKey=okKey and enumKey or Enum.KeyCode.RightShift
  w.StorageMode=w.fs and "file" or "memory"
  local parent=player:WaitForChild("PlayerGui")
  local registry=_G
@@ -731,6 +1243,45 @@ function Lib:CreateWindow(o)
  w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
  w._status=make("TextLabel",{Text="> reefFish "..Lib.Version.." | PROFILES | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
  w:_theme(w._status,"TextColor3","muted")
+ w._toastLayer=make("Frame",{
+  Position=UDim2.new(1,-299,1,-250),Size=UDim2.fromOffset(280,225),
+  BackgroundTransparency=1,BorderSizePixel=0,ZIndex=175
+ },w.screen)
+ make("UIListLayout",{
+  SortOrder=Enum.SortOrder.LayoutOrder,VerticalAlignment=Enum.VerticalAlignment.Bottom,
+  Padding=UDim.new(0,5)
+ },w._toastLayer)
+ -- One window-level key dispatcher.
+ w._connections[#w._connections+1]=UIS.InputBegan:Connect(function(i,processed)
+  if i.UserInputType~=Enum.UserInputType.Keyboard then return end
+  if w._bindingCapture then
+   if processed or UIS:GetFocusedTextBox() then return end
+   local captured=w._bindingCapture
+   w._bindingCapture=nil
+   if i.KeyCode~=Enum.KeyCode.Escape then
+    if not captured:Set(i.KeyCode.Name,true) then
+     captured:Set(captured:Get())
+     w:Notify("Invalid or reserved key","WARN")
+    end
+   else
+    captured:Set(captured:Get())
+    w:Notify("Keybind capture cancelled","INFO")
+   end
+   return
+  end
+  if processed or UIS:GetFocusedTextBox() then return end
+  if i.KeyCode==w.toggleKey then w:SetHidden(not w.hidden) return end
+  if w.hidden then return end
+  for _,bind in ipairs(w._keybinds) do
+   if bind:Get()==i.KeyCode.Name then bind:_input(true) end
+  end
+ end)
+ w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
+  if i.UserInputType~=Enum.UserInputType.Keyboard then return end
+  for _,bind in ipairs(w._keybinds) do
+   if bind:Get()==i.KeyCode.Name then bind:_input(false) end
+  end
+ end)
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
  local drag=false local dragStart,startPos
@@ -883,6 +1434,10 @@ function Lib:CreateWindow(o)
    Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},
    Default=w.themeName,Callback=function(value)w:SetTheme(value)end
   })
+  local accentPicker=appearance:CreateColorPicker({
+   Name="Accent colour",Default=w.colors.accent,
+   Callback=function(c)w:SetAccentColor(c)end
+  })
   local rain=appearance:CreateToggle({
    Name="Matrix rain",Default=w.rainEnabled,
    Callback=function(value)w:SetRain(value)end
@@ -903,6 +1458,7 @@ function Lib:CreateWindow(o)
   })
   local function syncAppearance()
    theme:Set(w.themeName)
+   accentPicker:Set(w.colors.accent)
    rain:Set(w.rainEnabled)
    density:Set(math.floor(w.rainDensity*100+.5))
    speed:Set(math.floor(w.rainSpeed*100+.5))

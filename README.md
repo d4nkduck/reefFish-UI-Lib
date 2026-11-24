@@ -1,8 +1,8 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.2.0-alpha  
+**Version:** 0.3.0-alpha  
 **License:** MIT  
-**Status:** Feature alpha — polished interactions and named profile management
+**Status:** Feature alpha — new controls, keybinds and notifications
 
 A lightweight Roblox Luau UI library with an intentionally distinctive look: dark console panels framed by thick phosphor-green borders containing inverse Matrix rain (dark glyphs on green). Built for game debug tooling; reusable in client-side Roblox Studio projects.
 
@@ -13,13 +13,14 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 - Draggable console window, minimize and close buttons, status line, notification banner
 - Slim (12 px default, configurable 9–16 px) inverse-Matrix bezel revealing a single vertical falling-code field that slowly scrolls right, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
-- UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, **searchable popup dropdowns**, single-line and multiline text inputs
-- Built-in Appearance and Config tabs with named profile management (unless disabled)
+- UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, searchable single/multi-select dropdowns, colour picker (HSV/HEX), keybinds (Press/Toggle/Hold), paragraphs and text inputs
+- Built-in Appearance and Config tabs with named profile management, editable accent colour and JSON import/export (unless disabled)
 - Hover/pressed button feedback, focused text input outlines, and themed slider handles
 - Appearance editor: theme, rain toggle, density, speed and live border thickness (9–16px)
 - Profile browsing, named save/load, rename/delete with confirmation, JSON import/export and optional debounced autosave
-- Session-safe component callback dispatch with `pcall`
-- Game configuration profiles and independently stored appearance profiles
+- Capped, animated on-screen toast notifications, built-in status line and safe component callback dispatch with `pcall`
+- Show/hide hotkey (RightShift default, configurable via `ToggleKey`) with a shared input dispatcher
+- Game configuration profiles and independently stored appearance profiles. Flags now persist Color3 and string-array values in addition to primitive values
 - Best-effort storage adapter for environments with `writefile`/`readfile`/`makefolder`; in-memory fallback in normal clients
 - Namespaced profiles by Roblox `game.GameId`, JSON-encoded with HttpService
 - Config loading **does not run user callbacks by default**
@@ -27,7 +28,7 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 
 ## What is planned, not implemented
 
-Keybind selector, colour picker, searchable multi-select dropdown, graphs, richer console drawer, notification queue, automated tests across client builds, responsive small-screen design, multi-window support, cross-session auto-load, and richer theme editing beyond the built-in presets.
+Graphs, richer console drawer, notification actions, automated tests across client builds, responsive small-screen design, multi-window support, cross-session auto-load, theme import/export beyond the built-in presets, and a resizable main window.
 
 ## Installation (Roblox Studio)
 
@@ -71,8 +72,13 @@ print(ok, reason)
 - `tab:CreateSlider({Name="NAME", Flag="unique-id", Min=0, Max=100, Increment=1, Default=25, Callback=function(number) end})` → `:Get()`, `:Set(number, fireCallback)`
 - `tab:CreateDropdown({Name="NAME", Flag="unique-id", Options={"A","B"}, Default="A", Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateInput({Name="NAME", Flag="unique-id", Default="text", Numeric=false, Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
+- `tab:CreateParagraph({Title="Help", Content="Long explanation", Height=96})` → `:Set(title,content)`
+- `tab:CreateColorPicker({Name="Tint", Flag="tint", Default=Color3.fromRGB(0,255,120), Callback=function(color3) end})` → `:Get()`, `:GetHex()`, `:GetRGB()`, `:Set(Color3 or "#RRGGBB", fireCallback)`, `:SetRGB(r,g,b,fireCallback)`
+- `tab:CreateMultiDropdown({Name="Filters", Flag="filters", Options={"A","B"}, Default={"A"}, Callback=function(array) end})` → `:Get()`, `:Set(array, fireCallback)`
+- `tab:CreateKeybind({Name="Overlay key", Flag="overlay.key", Default="F6", Mode="Toggle", Callback=function(active,keyName) end})` → `:Get()`, `:Set(keyName, fireChangeCallback)`
+- `tab:CreateTextArea({Name="JSON", Height=120})` → `:Get()`, `:Set(text)`
 
-Window methods: `:SetTheme(name)`, `:SetRain(enabled, density, speed)`, `:Notify(text, kind)`, `:SetMinimized(bool)`, `:SelectTab(tab)`, `:Destroy()`.
+Window methods: `:SetTheme(name)`, `:SetAccentColor(Color3 or hex)`, `:SetRain(enabled, density, speed)`, `:Notify(text, kind)`, `:Toast({Title,Content,Duration})`, `:SetMinimized(bool)`, `:SetHidden(bool)`, `:SelectTab(tab)`, `:Destroy()`. Most interactive component handles expose `:SetVisible(bool)`, `:SetDisabled(bool)` and `:Destroy()`.
 
 ## Configuration API
 
@@ -140,6 +146,41 @@ Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`
 - Searchable dropdowns and other controls remain available.
 - This release has not been visually validated in Roblox/Xeno; please test the updated loader.
 
+
+
+## v0.3.0-alpha — Original advanced controls and interactions
+
+This version builds upon the v0.2 profile manager. It is an **independent implementation** informed by feature-completeness goals from established Roblox libraries, not a copy of their source.
+
+- **Colour picker:** An embedded HSV square, rainbow hue bar, HEX input, separate RGB numeric fields, and a colour preview. Use `Get()` for a `Color3` value, `GetHex()` for a hex string, `GetRGB()` for integer channels, and `Set(value)` or `SetRGB(r,g,b)`. The Appearance tab includes a live accent colour picker.
+- **Keybinds:** A click-to-capture key selector, three modes (`Press`, `Toggle`, `Hold`), callback state, and a shared window-level input handler. Textbox focus and Roblox-processed input are ignored. The show/hide key is reserved.
+- **Multi-select dropdowns:** Popup search, click to toggle several options, and `Get()`/`Set()` returning/accepting arrays of strings.
+- **Paragraphs:** A compact title+body control with multiline content.
+- **Notifications:** Animated toasts with a maximum of four active items, timed dismissal, and a close button. `Window:Notify` also continues to update the bottom status line.
+- **Window keyboard shortcut:** RightShift by default; customize through `CreateWindow({ToggleKey=Enum.KeyCode.F8})`. Press it again to show the window after hiding.
+- **Config persistence:** Color3 values are JSON objects tagged `__reefFishType="Color3"`; multi-select values are stored as string arrays. Config schema version remains 1. Existing number/string/boolean profiles are compatible.
+- **Lightweight runtime:** The Matrix renderer remains the same vertical falling-wallpaper effect visible only through the thin border; notifications use short tasks, not new polling loops.
+
+### Studio smoke test
+
+Copy `src/reefFish.luau` into ReplicatedStorage as a ModuleScript named ReefFish, then run `examples/components-v0.3.luau` in a StarterPlayerScripts LocalScript. It includes a round-trip test for colour and multi-select profile saving.
+
+### Direct loader (compatible Lua environments)
+
+```lua
+local ReefFish = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/d4nkduck/reefFish-UI-Lib/main/dist/reefFish-v0.3.lua"
+))()
+
+assert(ReefFish.Version=="0.3.0-alpha", "Unexpected reefFish version")
+local Window=ReefFish:CreateWindow({
+    Title="reefFish COMPONENTS",
+    Theme="MatrixInverse",
+    ToggleKey=Enum.KeyCode.RightShift
+})
+```
+
+**Testing status:** Source/loader consistency and static checks are performed before publishing. A real Roblox Studio and Xeno session remains necessary to validate rendering, keyboard events, local file compatibility and performance. Use the versioned file to avoid confusing older cached builds.
 
 ## v0.2.0-alpha — Named profiles and refined controls
 
