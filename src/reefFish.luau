@@ -1,10 +1,10 @@
--- reefFish UI Lib v0.1.2-alpha
+-- reefFish UI Lib v0.1.3-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.1.2-alpha"}
+local Lib={Version="0.1.3-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -51,6 +51,7 @@ function Window:SetTheme(name)
  if self._closeDropdown then self._closeDropdown() end
  self.themeName=name self.colors=palettes[name]
  for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
+ if self._repaintRain then self._repaintRain() end
  return true
 end
 function Window:SetRain(enabled,density,speed)
@@ -58,6 +59,7 @@ function Window:SetRain(enabled,density,speed)
  if type(density)=="number" then self.rainDensity=math.clamp(density,0,1) end
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
  if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
+ if self._rainColumns and self._repaintRain then self._repaintRain() end
 end
 function Window:Notify(msg,kind)
  self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
@@ -370,7 +372,7 @@ function Lib:CreateWindow(o)
  local w=setmetatable({
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=true,rainDensity=.72,rainSpeed=.4,minimized=false,destroyed=false,
+  rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_connections={},fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
  w.StorageMode=w.fs and "file" or "memory"
@@ -396,7 +398,7 @@ function Lib:CreateWindow(o)
  w:_theme(inner,"BackgroundColor3","bg")
  local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
  w:_theme(top,"BackgroundColor3","panel")
- local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE"),Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
+ local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  [0.1.3]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
  w:_theme(caption,"TextColor3","accent")
  local min=make("TextButton",{Text="_",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-72,0,6),BorderSizePixel=0,ZIndex=7},top)
  local close=make("TextButton",{Text="X",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-37,0,6),BorderSizePixel=0,ZIndex=7},top)
@@ -405,7 +407,7 @@ function Lib:CreateWindow(o)
  w.nav=make("ScrollingFrame",{Size=UDim2.new(.3,0,1,0),ScrollBarThickness=0,BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6},w.body)
  make("UIListLayout",{Padding=UDim.new(0,4)},w.nav)
  w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
- w._status=make("TextLabel",{Text="> reefFish ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
+ w._status=make("TextLabel",{Text="> reefFish 0.1.3 | VERTICAL MATRIX | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
  w:_theme(w._status,"TextColor3","muted")
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
@@ -422,93 +424,108 @@ function Lib:CreateWindow(o)
    w.root.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+diff.X,startPos.Y.Scale,startPos.Y.Offset+diff.Y)
   end
  end)
- -- A SINGLE vertical Matrix field sits behind the content.
- -- The green window background is the bezel; the opaque inner panel masks
- -- the field everywhere except the border. No rain travels around the edges.
- -- Streams fall down at independent speeds. The field drifts RIGHT very slowly.
- -- Instance creation happens ONCE, never in the animation update.
+ -- reefFish v0.1.3: full-window VERTICAL matrix rain, with a border mask.
+ -- This intentionally looks like a conventional rain wallpaper:
+ -- every column falls DOWN only, its tail fading from pale ink to near-black.
+ -- The entire wallpaper drifts only 0.2-0.5 pixels RIGHT per second.
+ -- The solid inner UI frame occludes the rain, leaving it visible in the bezel.
+ --
+ -- Rendering optimization: ONE multiline RichText TextLabel per column.
+ -- No separate edge loops, sideways-moving letters, or per-frame object creation.
  local glyphs={"0","1","2","3","4","5","6","7","8","9",
   "ア","イ","ウ","エ","オ","カ","キ","ク","ケ","コ",
   "サ","シ","ス","セ","ソ","タ","チ","ツ","テ","ト",
   "ナ","ニ","ヌ","ネ","ノ","ハ","ヒ","フ","ヘ","ホ",
   "マ","ミ","ム","メ","モ","ヤ","ユ","ヨ","ラ","リ",
   "ル","レ","ロ","ワ","ヲ","ン"}
- local charCell=11
- local spacing=12
- local columns=math.ceil(w.width/spacing)+2
- local fieldWidth=columns*spacing
+ local cell=10
+ local spacing=9
+ local count=math.ceil(w.width/spacing)+4
+ local fieldPeriod=count*spacing
+ local streams={}
  local rainLayer=make("Frame",{
-  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
-  BorderSizePixel=0,ClipsDescendants=true,Active=false,ZIndex=2
+  Name="MatrixWallpaper",
+  Size=UDim2.fromScale(1,1),
+  BackgroundTransparency=1,BorderSizePixel=0,
+  ClipsDescendants=true,Active=false,ZIndex=2
  },w.root)
  w._rainLayer=rainLayer
- local streams={}
- for column=1,columns do
-  local length=math.random(7,12)
-  local labels={}
+ local function hex(c)
+  return string.format("#%02X%02X%02X",
+   math.floor(c.R*255+.5),
+   math.floor(c.G*255+.5),
+   math.floor(c.B*255+.5))
+ end
+ local function updateText(stream)
+  local lines={}
+  local length=stream.length
+  local visible=math.floor(length*w.rainDensity+.5)
   for n=1,length do
-   local relative=(n-1)/math.max(1,length-1)
-   local label=make("TextLabel",{
-    Size=UDim2.fromOffset(charCell,charCell),
-    BackgroundTransparency=1,BorderSizePixel=0,
-    Font=Enum.Font.Code,TextSize=10,
-    Text=glyphs[math.random(#glyphs)],
-    TextTransparency=math.clamp(.05+.9*relative*relative,.05,.96),
-    ZIndex=3,Visible=false
-   },rainLayer)
-   w:_theme(label,"TextColor3","ink")
-   labels[n]=label
+   local char=visible>0 and n>length-visible and glyphs[math.random(#glyphs)] or " "
+   local fade=(n/length)^1.7
+   local color=w.colors.border:Lerp(w.colors.ink,fade)
+   lines[n]='<font color="'..hex(color)..'">'..char..'</font>'
   end
-  streams[column]={
-   head=math.random(-w.height,w.height),
-   speed=math.random(25,59),
-   length=length,
-   labels=labels
+  stream.label.Text=table.concat(lines,"\n")
+ end
+ for col=1,count do
+  local length=math.random(8,14)
+  local label=make("TextLabel",{
+   Name="RainColumn",
+   Size=UDim2.fromOffset(cell,length*cell+10),
+   Position=UDim2.fromOffset((col-2)*spacing,-length*cell),
+   BackgroundTransparency=1,BorderSizePixel=0,
+   Font=Enum.Font.Code,TextSize=10,LineHeight=1,
+   TextXAlignment=Enum.TextXAlignment.Center,
+   TextYAlignment=Enum.TextYAlignment.Top,
+   RichText=true,TextWrapped=false,TextScaled=false,
+   Text="0",ZIndex=3
+  },rainLayer)
+  local stream={
+   label=label,length=length,
+   y=math.random(-w.height,w.height),
+   x=(col-2)*spacing,
+   speed=math.random(25,60),
+   change=math.random(),
+   seed=col
   }
+  streams[col]=stream
+  updateText(stream)
+ end
+ w._rainColumns=streams
+ w._repaintRain=function()
+  for _,stream in ipairs(streams) do updateText(stream) end
  end
  local elapsedBuffer=0
- local horizontalOffset=0
+ local drift=0
  w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function(dt)
   if w.destroyed or not w.rainEnabled or w.minimized then return end
   elapsedBuffer+=dt
-  if elapsedBuffer<.10 then return end -- Max ~10 animation updates/second
-  local elapsed=math.min(elapsedBuffer,.25)
+  if elapsedBuffer<.07 then return end -- at most 14 updates/second
+  local elapsed=math.min(elapsedBuffer,.20)
   elapsedBuffer=0
   local width=w.root.AbsoluteSize.X
   local height=w.root.AbsoluteSize.Y
   if width<=0 or height<=0 then return end
-
-  -- Continuous gentle rightward scroll, independent of falling speed.
-  -- Each column wraps only after travelling across the ENTIRE field.
-  horizontalOffset=(horizontalOffset+elapsed*(1.5+2*w.rainSpeed))%fieldWidth
-  for index,stream in ipairs(streams) do
-   stream.head+=elapsed*stream.speed*(.55+w.rainSpeed)
-   if stream.head-(stream.length-1)*charCell>height then
-    -- Restart above the frame at a randomized delay, like natural rain.
-    stream.head=-math.random(0,height)
-    stream.speed=math.random(25,59)
+  drift=(drift+elapsed*(.18+.30*w.rainSpeed))%fieldPeriod
+  local velocityScale=.6+w.rainSpeed
+  for _,stream in ipairs(streams) do
+   -- Falling is the dominant motion. Never advance glyphs horizontally
+   -- individually. Only the background-wide drift affects X.
+   stream.y=stream.y+stream.speed*velocityScale*elapsed
+   if stream.y>height+stream.length*cell then
+    stream.y=-stream.length*cell-math.random(0,math.floor(height*.5))
+    stream.speed=math.random(25,60)
    end
-   local x=(((index-1)*spacing+horizontalOffset)%fieldWidth)-spacing
-   local visibleCount=w.rainDensity>0 and
-     math.max(2,math.ceil(stream.length*w.rainDensity)) or 0
-
-   for n,label in ipairs(stream.labels) do
-    local y=stream.head-(n-1)*charCell
-    local inFrame=(x+charCell>0 and x<width and y+charCell>0 and y<height)
-    local onBorder=(x<pad or x+charCell>width-pad or
-      y<pad or y+charCell>height-pad)
-
-    -- The inner content panel masks the whole field except the bezel;
-    -- this check also avoids updating glyphs hidden far inside the panel.
-    local show=n<=visibleCount and inFrame and onBorder
-    label.Visible=show
-    if show then
-     label.Position=UDim2.fromOffset(math.floor(x),math.floor(y))
-     if n==1 or math.random()<.11 then
-      label.Text=glyphs[math.random(#glyphs)]
-     end
-    end
+   stream.change=stream.change+elapsed
+   if stream.change>=.26 then
+    stream.change=stream.change-.26
+    updateText(stream)
    end
+   local x=((stream.x+drift+spacing)%fieldPeriod)-spacing
+   stream.label.Position=UDim2.fromOffset(math.floor(x),math.floor(stream.y-stream.length*cell))
+   stream.label.Visible=x<width and x+cell>0 and stream.y>-cell
+     and stream.y-stream.length*cell<height
   end
  end)
  w.Config=configObject(w,"game")
