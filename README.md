@@ -28,7 +28,7 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 
 ## What is planned, not implemented
 
-RGB numeric fields in the colour picker, graphs, richer console drawer, notification actions, automated tests across client builds, responsive small-screen design, multi-window support, cross-session auto-load, theme import/export beyond the built-in presets, and a resizable main window.
+Graphs, richer console drawer, notification actions, automated tests across client builds, responsive small-screen design, multi-window support, cross-session auto-load, theme import/export beyond the built-in presets, and a resizable main window.
 
 ## Installation (Roblox Studio)
 
@@ -73,7 +73,7 @@ print(ok, reason)
 - `tab:CreateDropdown({Name="NAME", Flag="unique-id", Options={"A","B"}, Default="A", Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateInput({Name="NAME", Flag="unique-id", Default="text", Numeric=false, Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateParagraph({Title="Help", Content="Long explanation", Height=96})` → `:Set(title,content)`
-- `tab:CreateColorPicker({Name="Tint", Flag="tint", Default=Color3.fromRGB(0,255,120), Callback=function(color3) end})` → `:Get()`, `:GetHex()`, `:Set(Color3 or "#RRGGBB", fireCallback)`
+- `tab:CreateColorPicker({Name="Tint", Flag="tint", Default=Color3.fromRGB(0,255,120), Callback=function(color3) end})` → `:Get()`, `:GetHex()`, `:GetRGB()`, `:Set(Color3 or "#RRGGBB", fireCallback)`, `:SetRGB(r,g,b,fireCallback)`
 - `tab:CreateMultiDropdown({Name="Filters", Flag="filters", Options={"A","B"}, Default={"A"}, Callback=function(array) end})` → `:Get()`, `:Set(array, fireCallback)`
 - `tab:CreateKeybind({Name="Overlay key", Flag="overlay.key", Default="F6", Mode="Toggle", Callback=function(active,keyName) end})` → `:Get()`, `:Set(keyName, fireChangeCallback)`
 - `tab:CreateTextArea({Name="JSON", Height=120})` → `:Get()`, `:Set(text)`
@@ -152,7 +152,7 @@ Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`
 
 This version builds upon the v0.2 profile manager. It is an **independent implementation** informed by feature-completeness goals from established Roblox libraries, not a copy of their source.
 
-- **Colour picker:** An embedded HSV square, rainbow hue bar, HEX input, and a colour preview. Use `Get()` for a `Color3` value, `GetHex()` for a hex string, or `Set(value)` with either. The Appearance tab includes a live accent colour picker.
+- **Colour picker:** An embedded HSV square, rainbow hue bar, HEX input, separate RGB numeric fields, and a colour preview. Use `Get()` for a `Color3` value, `GetHex()` for a hex string, `GetRGB()` for integer channels, and `Set(value)` or `SetRGB(r,g,b)`. The Appearance tab includes a live accent colour picker.
 - **Keybinds:** A click-to-capture key selector, three modes (`Press`, `Toggle`, `Hold`), callback state, and a shared window-level input handler. Textbox focus and Roblox-processed input are ignored. The show/hide key is reserved.
 - **Multi-select dropdowns:** Popup search, click to toggle several options, and `Get()`/`Set()` returning/accepting arrays of strings.
 - **Paragraphs:** A compact title+body control with multiline content.
