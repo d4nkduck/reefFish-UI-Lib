@@ -114,3 +114,8 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 ## License
 
 MIT. See `LICENSE`.
+## GitHub alpha implementation notes
+
+The published GitHub source is a **compact alpha implementation** of the planned library. It is not byte-for-byte the earlier downloadable prototype. Dropdowns currently cycle through options when clicked (rather than opening a searchable menu); the interface is draggable but not resizable; and profile saving is limited to the provided JSON/file adapter or session memory. Some items described above are roadmap goals. Run the included example in Roblox Studio before depending on this in a published project.
+
+Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`. Both currently contain the same alpha code.
