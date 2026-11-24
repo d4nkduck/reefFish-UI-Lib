@@ -167,8 +167,67 @@ function Window:SetRain(enabled,density,speed)
  if self._rainColumns and self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
 end
+-- Small capped toast queue with a timed dismissal.
+function Window:Toast(info)
+ info=type(info)=="table" and info or {Content=tostring(info)}
+ if self.destroyed or not self._toastLayer then return nil end
+ local title=tostring(info.Title or "REEFFISH")
+ local content=tostring(info.Content or info.Message or "")
+ local duration=math.clamp(tonumber(info.Duration) or 4,1,15)
+ if #self._toasts>=4 then
+  local oldest=table.remove(self._toasts,1)
+  if oldest and oldest.Parent then oldest:Destroy() end
+ end
+ local frame=make("Frame",{
+  Size=UDim2.new(1,0,0,58),BackgroundColor3=self.colors.panel,
+  BackgroundTransparency=1,BorderSizePixel=0,ZIndex=180
+ },self._toastLayer)
+ round(frame,4)
+ make("UIStroke",{Color=self.colors.border,Thickness=1,Transparency=.2},frame)
+ local heading=make("TextLabel",{
+  Text="> "..title,TextColor3=self.colors.accent,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(8,3),Size=UDim2.new(1,-26,0,22),
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=13,
+  TextTransparency=1,ZIndex=181
+ },frame)
+ local body=make("TextLabel",{
+  Text=content,TextColor3=self.colors.text,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(8,23),Size=UDim2.new(1,-16,0,31),
+  TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
+  TextWrapped=true,Font=Enum.Font.Code,TextSize=12,TextTransparency=1,ZIndex=181
+ },frame)
+ local close=make("TextButton",{
+  Text="×",TextColor3=self.colors.muted,BackgroundTransparency=1,
+  Position=UDim2.new(1,-25,0,1),Size=UDim2.fromOffset(23,22),
+  Font=Enum.Font.Code,TextSize=16,ZIndex=182
+ },frame)
+ table.insert(self._toasts,frame)
+ local function dismiss()
+  if not frame.Parent then return end
+  for i=#self._toasts,1,-1 do if self._toasts[i]==frame then table.remove(self._toasts,i) end end
+  TweenService:Create(frame,TweenInfo.new(.16),{BackgroundTransparency=1}):Play()
+  TweenService:Create(heading,TweenInfo.new(.16),{TextTransparency=1}):Play()
+  TweenService:Create(body,TweenInfo.new(.16),{TextTransparency=1}):Play()
+  task.delay(.18,function()if frame.Parent then frame:Destroy() end end)
+ end
+ close.MouseButton1Click:Connect(dismiss)
+ TweenService:Create(frame,TweenInfo.new(.2),{BackgroundTransparency=.05}):Play()
+ TweenService:Create(heading,TweenInfo.new(.2),{TextTransparency=0}):Play()
+ TweenService:Create(body,TweenInfo.new(.2),{TextTransparency=.05}):Play()
+ task.delay(duration,dismiss)
+ return {Dismiss=dismiss}
+end
 function Window:Notify(msg,kind)
  self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
+ if self.enableToasts then
+  self:Toast({Title=kind or "INFO",Content=tostring(msg),Duration=3.5})
+ end
+end
+function Window:SetHidden(value)
+ self.hidden=value==true
+ if self._closeDropdown then self._closeDropdown() end
+ self.screen.Enabled=not self.hidden
+ return self.hidden
 end
 function Window:SetMinimized(value)
  self.minimized=value==true
@@ -187,6 +246,7 @@ function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
+ self._bindingCapture=nil
  -- Flush any queued autosaves before disconnecting.
  for kind,due in pairs(self._autosaveDue) do
   local name=self._autosaveTargets[kind]
@@ -731,8 +791,11 @@ function Tab:CreateKeybind(o)
   local name=typeof(candidate)=="EnumItem" and candidate.Name or candidate
   if type(name)~="string" then return false end
   if name=="None" or name=="" then selected=nil
-  elseif Enum.KeyCode[name] and name~="Unknown" and name~=w.toggleKey.Name then selected=name
-  else return false end
+  else
+   local okKey,key=pcall(function()return Enum.KeyCode[name]end)
+   if not okKey or not key or name=="Unknown" or name==w.toggleKey.Name then return false end
+   selected=name
+  end
   active=false
   redraw()
   if notify then
@@ -1062,8 +1125,13 @@ function Lib:CreateWindow(o)
   rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
+  _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
   fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
+ local requestedKey=o.ToggleKey or "RightShift"
+ if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
+ local okKey,enumKey=pcall(function()return Enum.KeyCode[requestedKey]end)
+ w.toggleKey=okKey and enumKey or Enum.KeyCode.RightShift
  w.StorageMode=w.fs and "file" or "memory"
  local parent=player:WaitForChild("PlayerGui")
  local registry=_G
@@ -1099,6 +1167,41 @@ function Lib:CreateWindow(o)
  w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
  w._status=make("TextLabel",{Text="> reefFish "..Lib.Version.." | PROFILES | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
  w:_theme(w._status,"TextColor3","muted")
+ w._toastLayer=make("Frame",{
+  Position=UDim2.new(1,-299,1,-250),Size=UDim2.fromOffset(280,225),
+  BackgroundTransparency=1,BorderSizePixel=0,ZIndex=175
+ },w.screen)
+ make("UIListLayout",{
+  SortOrder=Enum.SortOrder.LayoutOrder,VerticalAlignment=Enum.VerticalAlignment.Bottom,
+  Padding=UDim.new(0,5)
+ },w._toastLayer)
+ -- One window-level key dispatcher.
+ w._connections[#w._connections+1]=UIS.InputBegan:Connect(function(i,processed)
+  if i.UserInputType~=Enum.UserInputType.Keyboard then return end
+  if w._bindingCapture then
+   if processed or UIS:GetFocusedTextBox() then return end
+   local captured=w._bindingCapture
+   w._bindingCapture=nil
+   if i.KeyCode~=Enum.KeyCode.Escape then
+    if not captured:Set(i.KeyCode.Name,true) then w:Notify("Invalid or reserved key","WARN") end
+   else
+    w:Notify("Keybind capture cancelled","INFO")
+   end
+   return
+  end
+  if processed or UIS:GetFocusedTextBox() then return end
+  if i.KeyCode==w.toggleKey then w:SetHidden(not w.hidden) return end
+  if w.hidden then return end
+  for _,bind in ipairs(w._keybinds) do
+   if bind:Get()==i.KeyCode.Name then bind:_input(true) end
+  end
+ end)
+ w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
+  if i.UserInputType~=Enum.UserInputType.Keyboard then return end
+  for _,bind in ipairs(w._keybinds) do
+   if bind:Get()==i.KeyCode.Name then bind:_input(false) end
+  end
+ end)
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
  local drag=false local dragStart,startPos
@@ -1251,6 +1354,10 @@ function Lib:CreateWindow(o)
    Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},
    Default=w.themeName,Callback=function(value)w:SetTheme(value)end
   })
+  local accentPicker=appearance:CreateColorPicker({
+   Name="Accent colour",Default=w.colors.accent,
+   Callback=function(c)w:SetAccentColor(c)end
+  })
   local rain=appearance:CreateToggle({
    Name="Matrix rain",Default=w.rainEnabled,
    Callback=function(value)w:SetRain(value)end
@@ -1271,6 +1378,7 @@ function Lib:CreateWindow(o)
   })
   local function syncAppearance()
    theme:Set(w.themeName)
+   accentPicker:Set(w.colors.accent)
    rain:Set(w.rainEnabled)
    density:Set(math.floor(w.rainDensity*100+.5))
    speed:Set(math.floor(w.rainSpeed*100+.5))
