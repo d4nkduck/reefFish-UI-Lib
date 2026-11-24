@@ -223,7 +223,7 @@ function Tab:CreateDropdown(o)
   local panel=make("Frame",{Size=UDim2.fromOffset(panelWidth,panelHeight),BorderSizePixel=0,ZIndex=102},overlay)
   panel.BackgroundColor3=w.colors.panel
   round(panel,5)
-  make("UIStroke",{Color=w.colors.border,Thickness=1,ZIndex=102},panel)
+  make("UIStroke",{Color=w.colors.border,Thickness=1},panel)
   local function positionPanel()
    local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
    local x=math.clamp(b.AbsolutePosition.X,6,math.max(6,viewport.X-panelWidth-6))
