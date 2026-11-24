@@ -1,8 +1,8 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.1.3-alpha  
+**Version:** 0.2.0-alpha  
 **License:** MIT  
-**Status:** Iterating alpha — redesigned animation and dropdowns
+**Status:** Feature alpha — polished interactions and named profile management
 
 A lightweight Roblox Luau UI library with an intentionally distinctive look: dark console panels framed by thick phosphor-green borders containing inverse Matrix rain (dark glyphs on green). Built for game debug tooling; reusable in client-side Roblox Studio projects.
 
@@ -13,8 +13,11 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 - Draggable console window, minimize and close buttons, status line, notification banner
 - Slim (12 px default, configurable 9–16 px) inverse-Matrix bezel revealing a single vertical falling-code field that slowly scrolls right, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
-- UI controls: tabs, sections, labels, buttons, toggles, sliders, **searchable popup dropdowns**, text inputs
-- Built-in Appearance and Config tabs (unless disabled)
+- UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, **searchable popup dropdowns**, single-line and multiline text inputs
+- Built-in Appearance and Config tabs with named profile management (unless disabled)
+- Hover/pressed button feedback, focused text input outlines, and themed slider handles
+- Appearance editor: theme, rain toggle, density, speed and live border thickness (9–16px)
+- Profile browsing, named save/load, rename/delete with confirmation, JSON import/export and optional debounced autosave
 - Session-safe component callback dispatch with `pcall`
 - Game configuration profiles and independently stored appearance profiles
 - Best-effort storage adapter for environments with `writefile`/`readfile`/`makefolder`; in-memory fallback in normal clients
@@ -24,7 +27,7 @@ This is an **early alpha**, not a production-hardened full-featured library. No 
 
 ## What is planned, not implemented
 
-Keybind selector, colour picker, searchable multi-select dropdown, graphs, richer console drawer, notifications queue, export UI, automated tests across client builds, responsive small-screen design, multi-window management, theme import/export, full persistence management (list/rename/delete).
+Keybind selector, colour picker, searchable multi-select dropdown, graphs, richer console drawer, notification queue, automated tests across client builds, responsive small-screen design, multi-window support, cross-session auto-load, and richer theme editing beyond the built-in presets.
 
 ## Installation (Roblox Studio)
 
@@ -116,7 +119,7 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 MIT. See `LICENSE`.
 ## GitHub alpha implementation notes
 
-The published GitHub source is a **compact alpha implementation** of the planned library. It is not byte-for-byte the earlier downloadable prototype. Dropdowns now open a searchable scrollable popup, and the border has directional character trails; the interface is draggable but not resizable; and profile saving is limited to the provided JSON/file adapter or session memory. Some items described above are roadmap goals. Run the included example in Roblox Studio before depending on this in a published project.
+The GitHub implementation has evolved since the first downloadable prototype. Dropdowns now open searchable scrollable menus; the interface is draggable but not yet resizable; and file-backed profiles require the environment's optional filesystem functions. Some items described above remain roadmap goals. Run the included example in Roblox Studio before depending on this in a published project.
 
 Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`. Both currently contain the same alpha code.
 
@@ -136,6 +139,42 @@ Source: `src/reefFish.luau`. Standalone loader distribution: `dist/reefFish.lua`
 - Each trail includes changing digits/katakana, a darker leading character, and fading tail; the animation uses pooled labels and a capped 10 Hz update loop.
 - Searchable dropdowns and other controls remain available.
 - This release has not been visually validated in Roblox/Xeno; please test the updated loader.
+
+
+## v0.2.0-alpha — Named profiles and refined controls
+
+**Appearance menu:** Pick a theme, toggle Matrix rain, edit rain density and speed, and adjust the border thickness in real time. The rain is still the **inverse** design: dark characters on green, with a dark head at the *bottom* of each falling trail and characters fading into the green background toward the top. Character changes are now less jittery.
+
+**Profile manager:** Both the Appearance and Config tabs provide the same operations: browse existing profiles (when supported), enter a profile name, save/load, rename a selected profile, delete it with a two-click confirmation, and export/import JSON through a multiline text field. Export also attempts to copy JSON if `setclipboard` is available.
+
+**File support:** Saving and loading require `writefile`, `readfile`, and `makefolder` in the current environment. Browsing existing files after a fresh session requires `listfiles`; deletion and renaming require `delfile`. When file I/O is unavailable, profiles are stored only in the library's **current session memory**. The UI explicitly reports this.
+
+**Auto-save:** A checkbox can debounce changes for the selected profile by one second, **only while the window is open**. It does not auto-enable or auto-load profiles in subsequent sessions. Use **Load named profile** when you re-open the UI.
+
+**Important:** Loading game profiles restores stored component values **without firing game-specific callbacks** by default. This prevents an arbitrary saved config from automatically starting an operation. Developers can explicitly request callback execution through `Config:Load(name, {FireCallbacks=true})` when appropriate.
+
+### Programmatic configuration API
+
+```lua
+local ok, storageOrError = Window.Config:Save("npc_testing")
+local savedNames = Window.Config:List()
+local loaded, loadError = Window.Config:Load("npc_testing")
+local renamed, renameError = Window.Config:Rename("npc_testing", "npc_visual")
+local exportedJson = Window.Config:Export()
+local imported, importError = Window.Config:Import(exportedJson)
+local deleted, deleteError = Window.Config:Delete("npc_visual")
+
+Window.Appearance:Save("green_console")
+Window.Appearance:Load("green_console")
+Window:SetBorderThickness(10)
+Window:SetRain(true, 0.75, 0.35)
+```
+
+Profile names support letters, numbers, underscore and hyphen, up to 48 characters. Appearance profiles and game profiles live in separate folders. Game profiles are scoped by `game.GameId`. Unsupported profile schemas or profiles for another game are rejected.
+
+### Testing
+
+See `examples/profile-smoke.luau` for a small local test. This release is committed and statically reviewed, but not tested in your exact Xeno build until you try it. For a version-pinned loader, use `dist/reefFish-v0.2.lua`.
 
 ## v0.1.3-alpha — unmistakably vertical rain and cache diagnosis
 

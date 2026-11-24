@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0-alpha — Interaction polish and named profile manager
+
+- Smoothed inverse-Matrix fading: near-black head at the bottom of each falling stream, lighter characters trailing into the green border.
+- Reduced whole-stream character flicker by changing fewer glyphs per update.
+- Added centralized hover/pressed interactions, slider thumb, rounded tracks, and input focus outlines.
+- Added live border thickness adjustment, rain density/speed sliders and a complete builtin Appearance controls panel.
+- Added profile browsing, save/load, rename, delete with confirmation, JSON text-area import/export and optional clipboard export.
+- Added 1-second debounced autosave while the window is open; explicit loading remains manual.
+- Added read/write/list/delete filesystem capability detection, graceful memory fallback, schema and game-ID validation.
+- Kept source and distribution as a single-file Lua module; pinned loader also published as `dist/reefFish-v0.2.lua`.
+- Still alpha: not yet verified in every Roblox client/Xeno version.
+
 ## 0.1.3-alpha — Vertical rain field and uncached diagnostic build
 
 - Replaced per-glyph position updates with one multiline rich-text label per falling column.

@@ -1,10 +1,10 @@
--- reefFish UI Lib v0.1.3-alpha
+-- reefFish UI Lib v0.2.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.1.3-alpha"}
+local Lib={Version="0.2.0-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -27,7 +27,7 @@ local function validName(n)
  return type(n)=="string" and #n>0 and #n<=48 and n:match("^[%w_%-]+$")~=nil
 end
 local function storage()
- local funcs={read=readfile,write=writefile,mkdir=makefolder,exists=isfile,dir=isfolder}
+ local funcs={read=readfile,write=writefile,mkdir=makefolder,exists=isfile,dir=isfolder,list=listfiles,delete=delfile}
  if type(funcs.read)=="function" and type(funcs.write)=="function" and type(funcs.mkdir)=="function" then return funcs end
  return nil
 end
@@ -42,6 +42,46 @@ local function ensureDir(fs,path)
 end
 local Window={} Window.__index=Window
 local Tab={} Tab.__index=Tab
+-- Small, central interaction-state engine: no per-control animation loops.
+function Window:_feedback(hitbox,surface)
+ local state="normal"
+ local function refresh()
+  if not surface.Parent then return end
+  local base=self.colors.raised
+  if state=="hover" then
+   surface.BackgroundColor3=base:Lerp(self.colors.accent,.16)
+  elseif state=="pressed" then
+   surface.BackgroundColor3=base:Lerp(self.colors.accent,.32)
+  else
+   surface.BackgroundColor3=base
+  end
+ end
+ self._feedbackRefresh[#self._feedbackRefresh+1]=refresh
+ local function add(signal,fn)
+  self._connections[#self._connections+1]=signal:Connect(fn)
+ end
+ add(hitbox.MouseEnter,function()state="hover" refresh()end)
+ add(hitbox.MouseLeave,function()state="normal" refresh()end)
+ add(hitbox.MouseButton1Down,function()state="pressed" refresh()end)
+ add(hitbox.MouseButton1Up,function()state="hover" refresh()end)
+ refresh()
+end
+function Window:_markChanged(kind)
+ if self._importing then return end
+ local name=self._autosaveTargets[kind]
+ if name then self._autosaveDue[kind]=os.clock()+1 end
+end
+function Window:SetBorderThickness(value)
+ local n=math.clamp(math.floor(tonumber(value) or self.borderThickness),9,16)
+ self.borderThickness=n
+ if self.inner then
+  self.inner.Position=UDim2.fromOffset(n,n)
+  self.inner.Size=UDim2.new(1,-2*n,1,-2*n)
+  self:SetMinimized(self.minimized)
+ end
+ self:_markChanged("appearance")
+ return n
+end
 function Window:_theme(obj,property,token)
  self._bound[#self._bound+1]={obj,property,token}
  obj[property]=self.colors[token]
@@ -51,7 +91,10 @@ function Window:SetTheme(name)
  if self._closeDropdown then self._closeDropdown() end
  self.themeName=name self.colors=palettes[name]
  for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
+ for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
+ self:_markChanged("appearance")
  return true
 end
 function Window:SetRain(enabled,density,speed)
@@ -60,6 +103,7 @@ function Window:SetRain(enabled,density,speed)
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
  if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
  if self._rainColumns and self._repaintRain then self._repaintRain() end
+ self:_markChanged("appearance")
 end
 function Window:Notify(msg,kind)
  self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
@@ -81,6 +125,14 @@ function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
+ -- Flush any queued autosaves before disconnecting.
+ for kind,due in pairs(self._autosaveDue) do
+  local name=self._autosaveTargets[kind]
+  if due and name then
+   local obj=kind=="appearance" and self.Appearance or self.Config
+   if obj then pcall(function()obj:Save(name)end) end
+  end
+ end
  for _,c in ipairs(self._connections) do c:Disconnect() end
  self.screen:Destroy()
  if self._registry and self._registry.__reefFishWindow==self then
@@ -123,8 +175,9 @@ end
 function Tab:CreateButton(o)
  local w=self.window
  local f=self:_base(36)
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="[ "..tostring(o.Name or "Button").." ]",Font=Enum.Font.Code,TextSize=15},f)
+ local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Text="[ "..tostring(o.Name or "Button").." ]",Font=Enum.Font.Code,TextSize=15},f)
  w:_theme(b,"TextColor3","accent")
+ w:_feedback(b,f)
  local disabled=false
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
  return {SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end}
@@ -133,12 +186,22 @@ function Tab:CreateToggle(o)
  local w=self.window
  local f=self:_base(37)
  local value=o.Default==true
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(b,"TextColor3","text")
+ w:_feedback(b,f)
  local function render()b.Text="  ["..(value and "X" or " ").."] "..tostring(o.Name or "Toggle")end
  local handle={}
  function handle:Get()return value end
- function handle:Set(v,notify)value=v==true render() if notify then fire(o.Callback,value) end end
+ function handle:Set(v,notify)
+  if type(v)~="boolean" then return false end
+  value=v
+  render()
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,value)
+  end
+  return true
+ end
  w:_register(o.Flag,handle)
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()handle:Set(not value,true)end)
  render() return handle
@@ -152,20 +215,34 @@ function Tab:CreateSlider(o)
  local value=math.clamp(tonumber(o.Default) or min,min,max)
  local name=make("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(name,"TextColor3","text")
- local bar=make("TextButton",{Size=UDim2.new(1,-16,0,13),Position=UDim2.new(0,8,0,32),BorderSizePixel=0,Text=""},f)
+ local bar=make("TextButton",{Size=UDim2.new(1,-16,0,8),Position=UDim2.new(0,8,0,36),BorderSizePixel=0,Text="",AutoButtonColor=false},f)
  w:_theme(bar,"BackgroundColor3","panel")
+ round(bar,4)
  local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},bar)
  w:_theme(fill,"BackgroundColor3","accent")
+ round(fill,4)
+ local thumb=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(0,.5),
+  Size=UDim2.fromOffset(14,14),BorderSizePixel=0,Active=false
+ },bar)
+ w:_theme(thumb,"BackgroundColor3","accent")
+ round(thumb,7)
  local handle={}
  local function render()
   name.Text=tostring(o.Name or "Slider").."  "..tostring(value)
-  fill.Size=UDim2.fromScale((value-min)/(max-min),1)
+  local progress=(value-min)/(max-min)
+  fill.Size=UDim2.fromScale(progress,1)
+  thumb.Position=UDim2.fromScale(progress,.5)
  end
  function handle:Get()return value end
  function handle:Set(v,notify)
   if type(v)~="number" then return end
   value=math.clamp(min+math.floor(((v-min)/inc)+.5)*inc,min,max)
-  render() if notify then fire(o.Callback,value) end
+  render()
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,value)
+  end
  end
  local dragging=false
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
@@ -190,9 +267,10 @@ function Tab:CreateDropdown(o)
  local value=table.find(opts,o.Default) and o.Default or opts[1]
  local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
- local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
+ local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0,AutoButtonColor=false},f)
  w:_theme(b,"TextColor3","accent")
  w:_theme(b,"BackgroundColor3","panel")
+ w:_feedback(b,f)
  local handle={}
  local function render() b.Text=tostring(value or "Select...").."  ▾" end
  function handle:Get() return value end
@@ -200,7 +278,10 @@ function Tab:CreateDropdown(o)
   if not table.find(opts,v) then return false end
   value=v
   render()
-  if notify then fire(o.Callback,value) end
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,value)
+  end
   return true
  end
  function handle:SetOptions(nextOptions)
@@ -303,14 +384,58 @@ function Tab:CreateInput(o)
  w:_theme(name,"TextColor3","text")
  local box=make("TextBox",{Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),ClearTextOnFocus=false,Size=UDim2.new(1,-14,0,29),Position=UDim2.fromOffset(7,28),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
  w:_theme(box,"TextColor3","accent")w:_theme(box,"BackgroundColor3","panel")
+ local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.45},box)
+ w._connections[#w._connections+1]=box.Focused:Connect(function()
+  outline.Color=w.colors.accent outline.Transparency=0
+ end)
  local handle={}
  function handle:Get()return box.Text end
  function handle:Set(v,notify)
   if o.Numeric and tonumber(v)==nil then return end
-  box.Text=tostring(v) if notify then fire(o.Callback,box.Text) end
+  box.Text=tostring(v)
+  if notify then w:_markChanged("game") fire(o.Callback,box.Text) end
  end
- w._connections[#w._connections+1]=box.FocusLost:Connect(function() if not o.Numeric or tonumber(box.Text) then fire(o.Callback,box.Text) end end)
+ w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+  outline.Color=w.colors.muted outline.Transparency=.45
+  if not o.Numeric or tonumber(box.Text) then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,box.Text)
+  end
+ end)
  w:_register(o.Flag,handle) return handle
+end
+function Tab:CreateTextArea(o)
+ o=o or {}
+ local w=self.window
+ local height=math.clamp(tonumber(o.Height) or 120,80,240)
+ local f=self:_base(height)
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
+  Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
+  Font=Enum.Font.Code,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ w:_theme(label,"TextColor3","accent")
+ local box=make("TextBox",{
+  Size=UDim2.new(1,-12,1,-30),Position=UDim2.fromOffset(6,26),
+  BackgroundColor3=w.colors.panel,TextColor3=w.colors.text,
+  PlaceholderColor3=w.colors.muted,Text=tostring(o.Default or ""),
+  PlaceholderText=tostring(o.Placeholder or "Paste JSON here..."),
+  ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,
+  TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
+  Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0
+ },f)
+ round(box,3)
+ local outline=make("UIStroke",{Color=w.colors.muted,Transparency=.55,Thickness=1},box)
+ w._connections[#w._connections+1]=box.Focused:Connect(function()
+  outline.Color=w.colors.accent outline.Transparency=0
+ end)
+ w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+  outline.Color=w.colors.muted outline.Transparency=.55
+ end)
+ local handle={}
+ function handle:Get()return box.Text end
+ function handle:Set(v)box.Text=tostring(v or "")end
+ return handle
 end
 function Window:_register(flag,handle)
  if type(flag)=="string" and #flag>0 then self.flags[flag]=handle end
@@ -318,51 +443,245 @@ end
 local memory={}
 local function configObject(win,kind)
  local obj={}
- local function key(name)return "reefFishUI/"..(kind=="appearance" and "appearance/" or ("games/"..tostring(game.GameId).."/"))..name..".json" end
- function obj:Export()
-  if kind=="appearance" then return HttpService:JSONEncode({version=1,theme=win.themeName,rain=win.rainEnabled,density=win.rainDensity,speed=win.rainSpeed}) end
-  local flags={} for name,control in pairs(win.flags) do flags[name]=control:Get() end
-  return HttpService:JSONEncode({version=1,gameId=game.GameId,flags=flags})
+ local folder="reefFishUI/"..(kind=="appearance" and "appearance" or ("games/"..tostring(game.GameId)))
+ local function path(name)return folder.."/"..name..".json"end
+
+ local function readRaw(name)
+  if not validName(name) then return nil,"Invalid profile name" end
+  local file=path(name)
+  if win.fs then
+   local ok,value=pcall(win.fs.read,file)
+   if ok and type(value)=="string" then return value end
+  end
+  return memory[file],"Profile not found"
  end
- function obj:Import(source,options)
-  local ok,data=pcall(HttpService.JSONDecode,HttpService,source)
-  if not ok or type(data)~="table" then return false,"Invalid JSON" end
-  if kind=="appearance" then
-   if type(data.theme)=="string" then win:SetTheme(data.theme) end
-   win:SetRain(data.rain,data.density,data.speed)
-  else
-   if type(data.flags)~="table" then return false,"Missing flags" end
-   for flag,value in pairs(data.flags) do
-    local ctl=win.flags[flag]
-    if ctl and (type(value)=="boolean" or type(value)=="string" or type(value)=="number") then
-     ctl:Set(value,options and options.FireCallbacks==true)
+ local function writeRaw(name,content)
+  if not validName(name) then return false,"Invalid profile name" end
+  if type(content)~="string" then return false,"Profile data must be text" end
+  local file=path(name)
+  if win.fs then
+   local ok,err=pcall(function()
+    ensureDir(win.fs,folder)
+    win.fs.write(file,content)
+   end)
+   if not ok then return false,tostring(err) end
+   memory[file]=content
+   return true,"file"
+  end
+  memory[file]=content
+  return true,"memory"
+ end
+ function obj:List()
+  local names={}
+  local found={}
+  local function add(name)
+   if validName(name) and not found[name] then
+    found[name]=true
+    names[#names+1]=name
+   end
+  end
+  for p in pairs(memory) do
+   if p:sub(1,#folder+1)==folder.."/" then
+    add(p:sub(#folder+2):match("^([^/]+)%.json$"))
+   end
+  end
+  if win.fs and type(win.fs.list)=="function" then
+   local ok,paths=pcall(win.fs.list,folder)
+   if ok and type(paths)=="table" then
+    for _,filename in ipairs(paths) do
+     if type(filename)=="string" then
+      local normalized=filename:gsub("\\","/")
+      add(normalized:match("([^/]+)%.json$"))
+     end
     end
    end
   end
+  table.sort(names)
+  return names
+ end
+ function obj:Export()
+  if kind=="appearance" then
+   return HttpService:JSONEncode({
+    version=1,theme=win.themeName,rain=win.rainEnabled,
+    density=win.rainDensity,speed=win.rainSpeed,
+    borderThickness=win.borderThickness
+   })
+  end
+  local flags={}
+  for name,control in pairs(win.flags) do
+   local value=control:Get()
+   if type(value)=="boolean" or type(value)=="string" or type(value)=="number" then
+    flags[name]=value
+   end
+  end
+  return HttpService:JSONEncode({version=1,gameId=game.GameId,flags=flags})
+ end
+ function obj:Import(source,options)
+  if type(source)~="string" then return false,"Expected JSON text" end
+  local ok,data=pcall(HttpService.JSONDecode,HttpService,source)
+  if not ok or type(data)~="table" then return false,"Invalid JSON" end
+  if data.version~=1 then return false,"Unsupported profile schema" end
+  if kind=="game" then
+   if data.gameId~=nil and data.gameId~=game.GameId then
+    return false,"This profile belongs to another game"
+   end
+   if type(data.flags)~="table" then return false,"Missing flags" end
+  end
+  win._importing=true
+  local applied,err=pcall(function()
+   if kind=="appearance" then
+    if type(data.theme)=="string" then win:SetTheme(data.theme) end
+    if type(data.borderThickness)=="number" then win:SetBorderThickness(data.borderThickness) end
+    if type(data.rain)=="boolean" then
+     win:SetRain(data.rain,data.density,data.speed)
+    elseif type(data.density)=="number" or type(data.speed)=="number" then
+     win:SetRain(win.rainEnabled,data.density,data.speed)
+    end
+   else
+    for flag,value in pairs(data.flags) do
+     local ctl=win.flags[flag]
+     if ctl and (type(value)=="boolean" or type(value)=="string" or type(value)=="number") then
+      ctl:Set(value,options and options.FireCallbacks==true)
+     end
+    end
+   end
+  end)
+  win._importing=false
+  if not applied then return false,tostring(err) end
   return true
  end
  function obj:Save(name)
-  if not validName(name) then return false,"Invalid profile name" end
-  local path=key(name) local data=self:Export()
-  if not win.fs then memory[path]=data return true,"memory" end
-  local ok,err=pcall(function()
-   ensureDir(win.fs,path:match("^(.*)/[^/]+$"))
-   win.fs.write(path,data)
-  end)
-  if not ok then return false,tostring(err) end
-  return true,"file"
+  local ok,data=pcall(function()return self:Export()end)
+  if not ok then return false,tostring(data) end
+  return writeRaw(name,data)
  end
  function obj:Load(name,options)
+  local raw,err=readRaw(name)
+  if not raw then return false,err end
+  return self:Import(raw,options)
+ end
+ function obj:Delete(name)
   if not validName(name) then return false,"Invalid profile name" end
-  local path=key(name) local data=memory[path]
-  if not data and win.fs then
-   local ok,txt=pcall(win.fs.read,path)
-   if ok then data=txt end
+  local file=path(name)
+  if win.fs then
+   if type(win.fs.delete)~="function" then
+    return false,"Deletion not supported by the filesystem"
+   end
+   local ok,err=pcall(win.fs.delete,file)
+   if not ok then return false,tostring(err) end
   end
-  if not data then return false,"Profile not found" end
-  return self:Import(data,options)
+  memory[file]=nil
+  return true
+ end
+ function obj:Rename(oldName,newName)
+  if not validName(oldName) or not validName(newName) then return false,"Invalid profile name" end
+  if oldName==newName then return true end
+  local raw,err=readRaw(oldName)
+  if not raw then return false,err end
+  local existing=readRaw(newName)
+  if existing then return false,"Destination profile already exists" end
+  if win.fs and type(win.fs.delete)~="function" then
+   return false,"Renaming requires filesystem deletion support"
+  end
+  local saved,why=writeRaw(newName,raw)
+  if not saved then return false,why end
+  local deleted,message=self:Delete(oldName)
+  if not deleted then return false,message end
+  return true
  end
  return obj
+end
+function Window:_profileManager(tab,kind,store,onImported)
+ local title=kind=="appearance" and "APPEARANCE PROFILES" or "GAME PROFILES"
+ tab:CreateSection(title)
+ local storageLabel=tab:CreateLabel({Text="Storage: "..(self.StorageMode=="file" and "local files" or "session memory only")})
+ local profile=tab:CreateInput({Name="Profile name",Default="default",Placeholder="Letters, numbers, - and _"})
+ local picker=tab:CreateDropdown({
+  Name="Saved profiles",Options=store:List(),
+  Callback=function(name)profile:Set(name)end
+ })
+ local w=self
+ local function report(action,ok,detail)
+  w:Notify(ok and (action.." succeeded") or (action..": "..tostring(detail)),ok and "OK" or "ERROR")
+ end
+ local function refresh(selected)
+  picker:SetOptions(store:List())
+  if selected then picker:Set(selected) end
+ end
+ tab:CreateButton({Name="Save named profile",Callback=function()
+  local name=profile:Get()
+  local ok,why=store:Save(name)
+  if ok then
+   refresh(name)
+   if w._autosaveTargets[kind] then w._autosaveTargets[kind]=name end
+  end
+  report("Save",ok,why)
+ end})
+ tab:CreateButton({Name="Load named profile",Callback=function()
+  local name=profile:Get()
+  -- Import applies control values without running user callbacks.
+  local ok,why=store:Load(name)
+  if ok and onImported then onImported() end
+  report("Load",ok,why)
+ end})
+ tab:CreateButton({Name="Rename selected profile",Callback=function()
+  local source=picker:Get()
+  if not source then w:Notify("Select a saved profile first","WARN") return end
+  local dest=profile:Get()
+  local ok,why=store:Rename(source,dest)
+  if ok then
+   refresh(dest)
+   if w._autosaveTargets[kind]==source then w._autosaveTargets[kind]=dest end
+  end
+  report("Rename",ok,why)
+ end})
+ local confirmName,confirmUntil
+ tab:CreateButton({Name="Delete selected profile (confirm twice)",Callback=function()
+  local target=picker:Get()
+  if not target then w:Notify("No saved profile selected","WARN") return end
+  if confirmName~=target or os.clock()>(confirmUntil or 0) then
+   confirmName=target
+   confirmUntil=os.clock()+5
+   w:Notify("Click Delete again within 5 seconds to remove "..target,"WARN")
+   return
+  end
+  confirmName=nil
+  local ok,why=store:Delete(target)
+  if ok then
+   refresh()
+   if w._autosaveTargets[kind]==target then w._autosaveTargets[kind]=nil end
+  end
+  report("Delete",ok,why)
+ end})
+ tab:CreateToggle({Name="Auto-save selected profile (this session)",Default=false,Callback=function(enabled)
+  local name=profile:Get()
+  if enabled and not validName(name) then
+   w:Notify("Enter a valid profile name first","WARN")
+   return
+  end
+  w._autosaveTargets[kind]=enabled and name or nil
+  w._autosaveDue[kind]=nil
+  w:Notify(enabled and ("Auto-save to "..name.." enabled") or "Auto-save disabled","INFO")
+ end})
+ tab:CreateSection("JSON IMPORT / EXPORT")
+ local payload=tab:CreateTextArea({Name="Profile JSON",Height=125,Placeholder="Exported JSON appears here. Paste JSON here to import."})
+ tab:CreateButton({Name="Export values to JSON",Callback=function()
+  local ok,value=pcall(function()return store:Export()end)
+  if not ok then w:Notify("Export failed: "..tostring(value),"ERROR") return end
+  payload:Set(value)
+  if type(setclipboard)=="function" then
+   local copied=pcall(setclipboard,value)
+   w:Notify(copied and "JSON exported and copied" or "JSON exported into text field",copied and "OK" or "INFO")
+  else
+   w:Notify("JSON exported into text field","OK")
+  end
+ end})
+ tab:CreateButton({Name="Import values from JSON",Callback=function()
+  local ok,why=store:Import(payload:Get())
+  if ok and onImported then onImported() end
+  report("Import",ok,why)
+ end})
+ return {Refresh=refresh,Selected=picker,Name=profile}
 end
 function Lib:CreateWindow(o)
  o=o or {}
@@ -373,7 +692,9 @@ function Lib:CreateWindow(o)
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
   rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
-  flags={},tabs={},_bound={},_connections={},fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
+  flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
+  _autosaveTargets={},_autosaveDue={},_importing=false,
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
  },Window)
  w.StorageMode=w.fs and "file" or "memory"
  local parent=player:WaitForChild("PlayerGui")
@@ -396,9 +717,10 @@ function Lib:CreateWindow(o)
  local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
+ w.inner=inner
  local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
  w:_theme(top,"BackgroundColor3","panel")
- local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  [0.1.3]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
+ local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  ["..Lib.Version.."]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
  w:_theme(caption,"TextColor3","accent")
  local min=make("TextButton",{Text="_",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-72,0,6),BorderSizePixel=0,ZIndex=7},top)
  local close=make("TextButton",{Text="X",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-37,0,6),BorderSizePixel=0,ZIndex=7},top)
@@ -407,7 +729,7 @@ function Lib:CreateWindow(o)
  w.nav=make("ScrollingFrame",{Size=UDim2.new(.3,0,1,0),ScrollBarThickness=0,BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6},w.body)
  make("UIListLayout",{Padding=UDim.new(0,4)},w.nav)
  w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
- w._status=make("TextLabel",{Text="> reefFish 0.1.3 | VERTICAL MATRIX | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
+ w._status=make("TextLabel",{Text="> reefFish "..Lib.Version.." | PROFILES | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
  w:_theme(w._status,"TextColor3","muted")
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
@@ -456,14 +778,22 @@ function Lib:CreateWindow(o)
    math.floor(c.G*255+.5),
    math.floor(c.B*255+.5))
  end
- local function updateText(stream)
+ local function updateText(stream,initial)
   local lines={}
   local length=stream.length
   local visible=math.floor(length*w.rainDensity+.5)
   for n=1,length do
-   local char=visible>0 and n>length-visible and glyphs[math.random(#glyphs)] or " "
-   local fade=(n/length)^1.7
-   local color=w.colors.border:Lerp(w.colors.ink,fade)
+   local shown=visible>0 and n>length-visible
+   -- Inverse Matrix: the falling HEAD at the bottom is near-black;
+   -- the older tail above fades into the green border background.
+   -- This is the inverse of green-on-black rain, NOT a flipped stream.
+   if initial or stream.glyphs[n]==nil or n==length or math.random()<.15 then
+    stream.glyphs[n]=glyphs[math.random(#glyphs)]
+   end
+   local distance=math.clamp((n-(length-visible))/math.max(visible,1),0,1)
+   local contrast=distance*distance
+   local color=w.colors.border:Lerp(w.colors.ink,contrast)
+   local char=shown and stream.glyphs[n] or " "
    lines[n]='<font color="'..hex(color)..'">'..char..'</font>'
   end
   stream.label.Text=table.concat(lines,"\n")
@@ -487,10 +817,10 @@ function Lib:CreateWindow(o)
    x=(col-2)*spacing,
    speed=math.random(25,60),
    change=math.random(),
-   seed=col
+   seed=col,glyphs={}
   }
   streams[col]=stream
-  updateText(stream)
+  updateText(stream,true)
  end
  w._rainColumns=streams
  w._repaintRain=function()
@@ -530,17 +860,58 @@ function Lib:CreateWindow(o)
  end)
  w.Config=configObject(w,"game")
  w.Appearance=configObject(w,"appearance")
+ -- Centralized 1-second debounce. No new tasks on each slider change.
+ w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function()
+  if w.destroyed then return end
+  local now=os.clock()
+  for kind,due in pairs(w._autosaveDue) do
+   if due and now>=due then
+    w._autosaveDue[kind]=nil
+    local name=w._autosaveTargets[kind]
+    if name then
+     local manager=kind=="appearance" and w.Appearance or w.Config
+     local ok,err=manager:Save(name)
+     if not ok then w:Notify("Auto-save failed: "..tostring(err),"ERROR") end
+    end
+   end
+  end
+ end)
  if not o.HideBuiltins then
   local appearance=w:CreateTab({Name="APPEARANCE"})
   appearance:CreateSection("CONSOLE STYLE")
-  appearance:CreateDropdown({Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},Default=w.themeName,Callback=function(v)w:SetTheme(v)end})
-  appearance:CreateToggle({Name="Matrix rain",Default=true,Callback=function(v)w:SetRain(v)end})
-  appearance:CreateButton({Name="Save appearance",Callback=function()local ok,why=w.Appearance:Save("default")w:Notify(why,ok and "ok" or "error")end})
-  appearance:CreateButton({Name="Load appearance",Callback=function()local ok,why=w.Appearance:Load("default")w:Notify(ok and "Appearance loaded" or why,ok and "ok" or "error")end})
+  local theme=appearance:CreateDropdown({
+   Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},
+   Default=w.themeName,Callback=function(value)w:SetTheme(value)end
+  })
+  local rain=appearance:CreateToggle({
+   Name="Matrix rain",Default=w.rainEnabled,
+   Callback=function(value)w:SetRain(value)end
+  })
+  local density=appearance:CreateSlider({
+   Name="Rain density (%)",Min=0,Max=100,Increment=5,
+   Default=math.floor(w.rainDensity*100+.5),
+   Callback=function(value)w:SetRain(w.rainEnabled,value/100,w.rainSpeed)end
+  })
+  local speed=appearance:CreateSlider({
+   Name="Rain speed (%)",Min=0,Max=100,Increment=5,
+   Default=math.floor(w.rainSpeed*100+.5),
+   Callback=function(value)w:SetRain(w.rainEnabled,w.rainDensity,value/100)end
+  })
+  local border=appearance:CreateSlider({
+   Name="Border thickness",Min=9,Max=16,Increment=1,Default=w.borderThickness,
+   Callback=function(value)w:SetBorderThickness(value)end
+  })
+  local function syncAppearance()
+   theme:Set(w.themeName)
+   rain:Set(w.rainEnabled)
+   density:Set(math.floor(w.rainDensity*100+.5))
+   speed:Set(math.floor(w.rainSpeed*100+.5))
+   border:Set(w.borderThickness)
+  end
+  w:_profileManager(appearance,"appearance",w.Appearance,syncAppearance)
   local config=w:CreateTab({Name="CONFIG"})
-  config:CreateSection("GAME SETTINGS")
-  config:CreateButton({Name="Save default profile",Callback=function()local ok,why=w.Config:Save("default")w:Notify(why,ok and "ok" or "error")end})
-  config:CreateButton({Name="Load default profile",Callback=function()local ok,why=w.Config:Load("default")w:Notify(ok and "Loaded" or why,ok and "ok" or "error")end})
+  config:CreateLabel({Text="Profiles are isolated by game.GameId. Loading restores values, not callbacks."})
+  w:_profileManager(config,"game",w.Config)
  end
  return w
 end
