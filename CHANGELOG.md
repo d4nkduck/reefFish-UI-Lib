@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0-alpha — Advanced components and interaction layer
+
+- Implemented original colour picker with HSV square, hue bar, hexadecimal input, live swatch and Color3 API.
+- Implemented keyboard capture and keybinds with Press/Toggle/Hold modes, one shared input dispatcher and show/hide hotkey.
+- Added searchable multi-select dropdowns with array return values.
+- Added title-and-body paragraphs, more consistent component visibility and disabled methods.
+- Added capped animated toast notifications, timed dismissal and integration with status messages.
+- Added custom accent colour editing to Appearance tab; preserved existing themes and vertical inverse Matrix border.
+- Extended JSON config serialization for Color3 values and arrays of selected options; kept schema v1 compatibility.
+- Added `examples/components-v0.3.luau` demonstration/smoke-test and unique `dist/reefFish-v0.3.lua` distribution.
+
 ## 0.2.0-alpha — Interaction polish and named profile manager
 
 - Smoothed inverse-Matrix fading: near-black head at the bottom of each falling stream, lighter characters trailing into the green border.
