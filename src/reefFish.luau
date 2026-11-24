@@ -292,7 +292,12 @@ function Tab:CreateLabel(o)
  local f=self:_base(32)
  local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(8,0),Size=UDim2.new(1,-16,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=14,TextWrapped=true},f)
  self.window:_theme(l,"TextColor3","text")
- return {SetText=function(_,v)l.Text=tostring(v)end}
+ return {
+  SetText=function(_,v)l.Text=tostring(v)end,
+  Get=function()return l.Text end,
+  SetVisible=function(_,v)f.Visible=v~=false end,
+  Destroy=function()f:Destroy()end
+ }
 end
 function Tab:CreateButton(o)
  local w=self.window
@@ -302,7 +307,11 @@ function Tab:CreateButton(o)
  w:_feedback(b,f)
  local disabled=false
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
- return {SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end}
+ return {
+  SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end,
+  SetVisible=function(_,v)f.Visible=v~=false end,
+  Destroy=function()f:Destroy()end
+ }
 end
 function Tab:CreateToggle(o)
  local w=self.window
@@ -311,8 +320,12 @@ function Tab:CreateToggle(o)
  local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(b,"TextColor3","text")
  w:_feedback(b,f)
+ local disabled=false
  local function render()b.Text="  ["..(value and "X" or " ").."] "..tostring(o.Name or "Toggle")end
  local handle={}
+ function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  function handle:Get()return value end
  function handle:Set(v,notify)
   if type(v)~="boolean" then return false end
@@ -325,7 +338,9 @@ function Tab:CreateToggle(o)
   return true
  end
  w:_register(o.Flag,handle)
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()handle:Set(not value,true)end)
+ w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
+  if not disabled then handle:Set(not value,true) end
+ end)
  render() return handle
 end
 function Tab:CreateSlider(o)
@@ -350,6 +365,10 @@ function Tab:CreateSlider(o)
  w:_theme(thumb,"BackgroundColor3","accent")
  round(thumb,7)
  local handle={}
+ local disabled=false
+ function handle:SetDisabled(v)disabled=v==true f.BackgroundTransparency=disabled and .5 or 0 end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  local function render()
   name.Text=tostring(o.Name or "Slider").."  "..tostring(value)
   local progress=(value-min)/(max-min)
@@ -368,13 +387,13 @@ function Tab:CreateSlider(o)
  end
  local dragging=false
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true end
+  if not disabled and (i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch) then dragging=true end
  end)
  w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
  end)
  w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+  if not disabled and dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
    handle:Set(min+math.clamp((i.Position.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)*(max-min),true)
   end
  end)
@@ -406,6 +425,16 @@ function Tab:CreateDropdown(o)
  w:_theme(b,"BackgroundColor3","panel")
  w:_feedback(b,f)
  local handle={}
+ local disabled=false
+ function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetVisible(v)
+  f.Visible=v~=false
+  if not f.Visible and w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
+ end
+ function handle:Destroy()
+  if w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
+  f:Destroy()
+ end
  local function render()
   if multi then b.Text=(#value==0 and "Select..." or table.concat(value,", ")).."  ▾"
   else b.Text=tostring(value or "Select...").."  ▾" end
@@ -448,7 +477,7 @@ function Tab:CreateDropdown(o)
   if w._closeDropdown then w._closeDropdown() end
  end
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
-  if w.destroyed then return end
+  if w.destroyed or disabled then return end
   if w._dropdownOwner==b and w._closeDropdown then
    w._closeDropdown()
    return
@@ -558,6 +587,9 @@ function Tab:CreateInput(o)
   outline.Color=w.colors.accent outline.Transparency=0
  end)
  local handle={}
+ function handle:SetDisabled(v)box.TextEditable=v~=true end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  function handle:Get()return box.Text end
  function handle:Set(v,notify)
   if o.Numeric and tonumber(v)==nil then return end
@@ -865,6 +897,9 @@ function Tab:CreateTextArea(o)
  local handle={}
  function handle:Get()return box.Text end
  function handle:Set(v)box.Text=tostring(v or "")end
+ function handle:SetDisabled(v)box.TextEditable=v~=true end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
  return handle
 end
 function Window:_register(flag,handle)
@@ -1183,8 +1218,12 @@ function Lib:CreateWindow(o)
    local captured=w._bindingCapture
    w._bindingCapture=nil
    if i.KeyCode~=Enum.KeyCode.Escape then
-    if not captured:Set(i.KeyCode.Name,true) then w:Notify("Invalid or reserved key","WARN") end
+    if not captured:Set(i.KeyCode.Name,true) then
+     captured:Set(captured:Get())
+     w:Notify("Invalid or reserved key","WARN")
+    end
    else
+    captured:Set(captured:Get())
     w:Notify("Keybind capture cancelled","INFO")
    end
    return
