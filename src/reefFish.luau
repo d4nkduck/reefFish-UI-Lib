@@ -1,10 +1,11 @@
--- reefFish UI Lib v0.2.0-alpha
+-- reefFish UI Lib v0.3.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
-local Lib={Version="0.2.0-alpha"}
+local TweenService=game:GetService("TweenService")
+local Lib={Version="0.3.0-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -22,6 +23,55 @@ end
 local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 4)},x) end
 local function fire(fn,...)
  if type(fn)=="function" then local ok,err=pcall(fn,...) if not ok then warn("[reefFish]",err) end end
+end
+
+local function colorHex(color)
+ return string.format("#%02X%02X%02X",
+  math.floor(color.R*255+.5),math.floor(color.G*255+.5),math.floor(color.B*255+.5))
+end
+local function parseColor(value)
+ if typeof(value)=="Color3" then return value end
+ if type(value)=="string" then
+  local h=value:gsub("#","")
+  if #h==6 and h:match("^[0-9a-fA-F]+$") then
+   return Color3.fromRGB(tonumber(h:sub(1,2),16),tonumber(h:sub(3,4),16),tonumber(h:sub(5,6),16))
+  end
+ end
+ return nil
+end
+local function packValue(v)
+ if typeof(v)=="Color3" then
+  return {__reefFishType="Color3",R=v.R,G=v.G,B=v.B}
+ end
+ if type(v)=="boolean" or type(v)=="string" or type(v)=="number" then return v end
+ if type(v)=="table" then
+  local out={}
+  if #v>100 then return nil end
+  for i,item in ipairs(v) do
+   if type(item)~="string" then return nil end
+   out[i]=item
+  end
+  return out
+ end
+ return nil
+end
+local function unpackValue(v)
+ if type(v)=="table" then
+  if v.__reefFishType=="Color3" then
+   if type(v.R)~="number" or type(v.G)~="number" or type(v.B)~="number" then return nil end
+   if v.R~=v.R or v.G~=v.G or v.B~=v.B then return nil end
+   return Color3.new(math.clamp(v.R,0,1),math.clamp(v.G,0,1),math.clamp(v.B,0,1))
+  end
+  if v.__reefFishType~=nil or #v>100 then return nil end
+  local out={}
+  for i,item in ipairs(v) do
+   if type(item)~="string" then return nil end
+   out[i]=item
+  end
+  return out
+ end
+ if type(v)=="boolean" or type(v)=="string" or type(v)=="number" then return v end
+ return nil
 end
 local function validName(n)
  return type(n)=="string" and #n>0 and #n<=48 and n:match("^[%w_%-]+$")~=nil
@@ -89,11 +139,23 @@ end
 function Window:SetTheme(name)
  if not palettes[name] then return false end
  if self._closeDropdown then self._closeDropdown() end
- self.themeName=name self.colors=palettes[name]
+ self.themeName=name self.colors=table.clone(palettes[name])
  for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
  for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
  if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
+ self:_markChanged("appearance")
+ return true
+end
+
+function Window:SetAccentColor(value)
+ local color=parseColor(value)
+ if not color then return false end
+ self.colors.accent=color
+ for _,bound in ipairs(self._bound) do
+  if bound[3]=="accent" and bound[1].Parent then bound[1][bound[2]]=color end
+ end
+ for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
  self:_markChanged("appearance")
  return true
 end
@@ -263,8 +325,20 @@ function Tab:CreateDropdown(o)
  o=o or {}
  local w=self.window
  local f=self:_base(70)
+
  local opts=o.Options or {}
- local value=table.find(opts,o.Default) and o.Default or opts[1]
+ local multi=o.Multi==true
+ local value
+ if multi then
+  value={}
+  if type(o.Default)=="table" then
+   for _,entry in ipairs(o.Default) do
+    if table.find(opts,entry) and not table.find(value,entry) then table.insert(value,entry) end
+   end
+  end
+ else
+  value=table.find(opts,o.Default) and o.Default or opts[1]
+ end
  local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
  local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0,AutoButtonColor=false},f)
@@ -272,22 +346,44 @@ function Tab:CreateDropdown(o)
  w:_theme(b,"BackgroundColor3","panel")
  w:_feedback(b,f)
  local handle={}
- local function render() b.Text=tostring(value or "Select...").."  ▾" end
- function handle:Get() return value end
+ local function render()
+  if multi then b.Text=(#value==0 and "Select..." or table.concat(value,", ")).."  ▾"
+  else b.Text=tostring(value or "Select...").."  ▾" end
+ end
+ function handle:Get()
+  if not multi then return value end
+  return table.clone(value)
+ end
  function handle:Set(v,notify)
-  if not table.find(opts,v) then return false end
-  value=v
+  if multi then
+   if type(v)~="table" or #v>100 then return false end
+   local selected={}
+   for _,entry in ipairs(v) do
+    if type(entry)~="string" or not table.find(opts,entry) then return false end
+    if not table.find(selected,entry) then table.insert(selected,entry) end
+   end
+   value=selected
+  else
+   if not table.find(opts,v) then return false end
+   value=v
+  end
   render()
   if notify then
    if o.Flag then w:_markChanged("game") end
-   fire(o.Callback,value)
+   fire(o.Callback,handle:Get())
   end
   return true
  end
  function handle:SetOptions(nextOptions)
   if type(nextOptions)~="table" then return end
   opts=nextOptions
-  if not table.find(opts,value) then value=opts[1] end
+  if multi then
+   local selected={}
+   for _,entry in ipairs(value) do
+    if table.find(opts,entry) then table.insert(selected,entry) end
+   end
+   value=selected
+  elseif not table.find(opts,value) then value=opts[1] end
   render()
   if w._closeDropdown then w._closeDropdown() end
  end
@@ -341,7 +437,7 @@ function Tab:CreateDropdown(o)
     if query=="" or string.find(string.lower(label),query,1,true) then
      local chosen=option
      local item=make("TextButton",{
-      Text=(chosen==value and "✓  " or "   ")..label,
+      Text=((multi and table.find(value,chosen)~=nil or chosen==value) and "✓  " or "   ")..label,
       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
       TextColor3=chosen==value and w.colors.accent or w.colors.text,
       BorderSizePixel=0,Font=Enum.Font.Code,TextSize=13,
@@ -350,8 +446,16 @@ function Tab:CreateDropdown(o)
      round(item,3)
      optionButtons[#optionButtons+1]=item
      item.MouseButton1Click:Connect(function()
-      handle:Set(chosen,true)
-      if w._closeDropdown then w._closeDropdown() end
+      if multi then
+       local nextValue=table.clone(value)
+       local index=table.find(nextValue,chosen)
+       if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
+       handle:Set(nextValue,true)
+       updateList()
+      else
+       handle:Set(chosen,true)
+       if w._closeDropdown then w._closeDropdown() end
+      end
      end)
     end
    end
@@ -376,6 +480,11 @@ function Tab:CreateDropdown(o)
  w:_register(o.Flag,handle)
  render()
  return handle
+end
+function Tab:CreateMultiDropdown(o)
+ o=o or {}
+ o.Multi=true
+ return self:CreateDropdown(o)
 end
 function Tab:CreateInput(o)
  local w=self.window
@@ -504,15 +613,14 @@ local function configObject(win,kind)
    return HttpService:JSONEncode({
     version=1,theme=win.themeName,rain=win.rainEnabled,
     density=win.rainDensity,speed=win.rainSpeed,
-    borderThickness=win.borderThickness
+    borderThickness=win.borderThickness,
+    accent=packValue(win.colors.accent)
    })
   end
   local flags={}
   for name,control in pairs(win.flags) do
-   local value=control:Get()
-   if type(value)=="boolean" or type(value)=="string" or type(value)=="number" then
-    flags[name]=value
-   end
+   local value=packValue(control:Get())
+   if value~=nil then flags[name]=value end
   end
   return HttpService:JSONEncode({version=1,gameId=game.GameId,flags=flags})
  end
@@ -532,6 +640,7 @@ local function configObject(win,kind)
    if kind=="appearance" then
     if type(data.theme)=="string" then win:SetTheme(data.theme) end
     if type(data.borderThickness)=="number" then win:SetBorderThickness(data.borderThickness) end
+    if data.accent then win:SetAccentColor(unpackValue(data.accent)) end
     if type(data.rain)=="boolean" then
      win:SetRain(data.rain,data.density,data.speed)
     elseif type(data.density)=="number" or type(data.speed)=="number" then
@@ -540,8 +649,9 @@ local function configObject(win,kind)
    else
     for flag,value in pairs(data.flags) do
      local ctl=win.flags[flag]
-     if ctl and (type(value)=="boolean" or type(value)=="string" or type(value)=="number") then
-      ctl:Set(value,options and options.FireCallbacks==true)
+     if ctl then
+      local decoded=unpackValue(value)
+      if decoded~=nil then ctl:Set(decoded,options and options.FireCallbacks==true) end
      end
     end
    end
@@ -687,7 +797,7 @@ function Lib:CreateWindow(o)
  o=o or {}
  local player=Players.LocalPlayer
  assert(player,"reefFish must run in a client LocalScript")
- local colors=palettes[o.Theme] or palettes.MatrixInverse
+ local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
  local w=setmetatable({
   width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
