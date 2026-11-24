@@ -196,7 +196,10 @@ function Tab:CreateToggle(o)
   if type(v)~="boolean" then return false end
   value=v
   render()
-  if notify then w:_markChanged("game") fire(o.Callback,value) end
+  if notify then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,value)
+  end
   return true
  end
  w:_register(o.Flag,handle)
@@ -395,55 +398,188 @@ function Tab:CreateInput(o)
  end)
  w:_register(o.Flag,handle) return handle
 end
+function Tab:CreateTextArea(o)
+ o=o or {}
+ local w=self.window
+ local height=math.clamp(tonumber(o.Height) or 120,80,240)
+ local f=self:_base(height)
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
+  Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
+  Font=Enum.Font.Code,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ w:_theme(label,"TextColor3","accent")
+ local box=make("TextBox",{
+  Size=UDim2.new(1,-12,1,-30),Position=UDim2.fromOffset(6,26),
+  BackgroundColor3=w.colors.panel,TextColor3=w.colors.text,
+  PlaceholderColor3=w.colors.muted,Text=tostring(o.Default or ""),
+  PlaceholderText=tostring(o.Placeholder or "Paste JSON here..."),
+  ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,
+  TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
+  Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0
+ },f)
+ round(box,3)
+ local outline=make("UIStroke",{Color=w.colors.muted,Transparency=.55,Thickness=1},box)
+ w._connections[#w._connections+1]=box.Focused:Connect(function()
+  outline.Color=w.colors.accent outline.Transparency=0
+ end)
+ w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+  outline.Color=w.colors.muted outline.Transparency=.55
+ end)
+ local handle={}
+ function handle:Get()return box.Text end
+ function handle:Set(v)box.Text=tostring(v or "")end
+ return handle
+end
 function Window:_register(flag,handle)
  if type(flag)=="string" and #flag>0 then self.flags[flag]=handle end
 end
 local memory={}
 local function configObject(win,kind)
  local obj={}
- local function key(name)return "reefFishUI/"..(kind=="appearance" and "appearance/" or ("games/"..tostring(game.GameId).."/"))..name..".json" end
- function obj:Export()
-  if kind=="appearance" then return HttpService:JSONEncode({version=1,theme=win.themeName,rain=win.rainEnabled,density=win.rainDensity,speed=win.rainSpeed}) end
-  local flags={} for name,control in pairs(win.flags) do flags[name]=control:Get() end
-  return HttpService:JSONEncode({version=1,gameId=game.GameId,flags=flags})
+ local folder="reefFishUI/"..(kind=="appearance" and "appearance" or ("games/"..tostring(game.GameId)))
+ local function path(name)return folder.."/"..name..".json"end
+
+ local function readRaw(name)
+  if not validName(name) then return nil,"Invalid profile name" end
+  local file=path(name)
+  if win.fs then
+   local ok,value=pcall(win.fs.read,file)
+   if ok and type(value)=="string" then return value end
+  end
+  return memory[file],"Profile not found"
  end
- function obj:Import(source,options)
-  local ok,data=pcall(HttpService.JSONDecode,HttpService,source)
-  if not ok or type(data)~="table" then return false,"Invalid JSON" end
-  if kind=="appearance" then
-   if type(data.theme)=="string" then win:SetTheme(data.theme) end
-   win:SetRain(data.rain,data.density,data.speed)
-  else
-   if type(data.flags)~="table" then return false,"Missing flags" end
-   for flag,value in pairs(data.flags) do
-    local ctl=win.flags[flag]
-    if ctl and (type(value)=="boolean" or type(value)=="string" or type(value)=="number") then
-     ctl:Set(value,options and options.FireCallbacks==true)
+ local function writeRaw(name,content)
+  if not validName(name) then return false,"Invalid profile name" end
+  if type(content)~="string" then return false,"Profile data must be text" end
+  local file=path(name)
+  if win.fs then
+   local ok,err=pcall(function()
+    ensureDir(win.fs,folder)
+    win.fs.write(file,content)
+   end)
+   if not ok then return false,tostring(err) end
+   memory[file]=content
+   return true,"file"
+  end
+  memory[file]=content
+  return true,"memory"
+ end
+ function obj:List()
+  local names={}
+  local found={}
+  local function add(name)
+   if validName(name) and not found[name] then
+    found[name]=true
+    names[#names+1]=name
+   end
+  end
+  for p in pairs(memory) do
+   if p:sub(1,#folder+1)==folder.."/" then
+    add(p:sub(#folder+2):match("^([^/]+)%.json$"))
+   end
+  end
+  if win.fs and type(win.fs.list)=="function" then
+   local ok,paths=pcall(win.fs.list,folder)
+   if ok and type(paths)=="table" then
+    for _,filename in ipairs(paths) do
+     if type(filename)=="string" then
+      local normalized=filename:gsub("\\","/")
+      add(normalized:match("([^/]+)%.json$"))
+     end
     end
    end
   end
+  table.sort(names)
+  return names
+ end
+ function obj:Export()
+  if kind=="appearance" then
+   return HttpService:JSONEncode({
+    version=1,theme=win.themeName,rain=win.rainEnabled,
+    density=win.rainDensity,speed=win.rainSpeed,
+    borderThickness=win.borderThickness
+   })
+  end
+  local flags={}
+  for name,control in pairs(win.flags) do
+   local value=control:Get()
+   if type(value)=="boolean" or type(value)=="string" or type(value)=="number" then
+    flags[name]=value
+   end
+  end
+  return HttpService:JSONEncode({version=1,gameId=game.GameId,flags=flags})
+ end
+ function obj:Import(source,options)
+  if type(source)~="string" then return false,"Expected JSON text" end
+  local ok,data=pcall(HttpService.JSONDecode,HttpService,source)
+  if not ok or type(data)~="table" then return false,"Invalid JSON" end
+  if data.version~=1 then return false,"Unsupported profile schema" end
+  if kind=="game" then
+   if data.gameId~=nil and data.gameId~=game.GameId then
+    return false,"This profile belongs to another game"
+   end
+   if type(data.flags)~="table" then return false,"Missing flags" end
+  end
+  win._importing=true
+  local applied,err=pcall(function()
+   if kind=="appearance" then
+    if type(data.theme)=="string" then win:SetTheme(data.theme) end
+    if type(data.borderThickness)=="number" then win:SetBorderThickness(data.borderThickness) end
+    if type(data.rain)=="boolean" then
+     win:SetRain(data.rain,data.density,data.speed)
+    elseif type(data.density)=="number" or type(data.speed)=="number" then
+     win:SetRain(win.rainEnabled,data.density,data.speed)
+    end
+   else
+    for flag,value in pairs(data.flags) do
+     local ctl=win.flags[flag]
+     if ctl and (type(value)=="boolean" or type(value)=="string" or type(value)=="number") then
+      ctl:Set(value,options and options.FireCallbacks==true)
+     end
+    end
+   end
+  end)
+  win._importing=false
+  if not applied then return false,tostring(err) end
   return true
  end
  function obj:Save(name)
-  if not validName(name) then return false,"Invalid profile name" end
-  local path=key(name) local data=self:Export()
-  if not win.fs then memory[path]=data return true,"memory" end
-  local ok,err=pcall(function()
-   ensureDir(win.fs,path:match("^(.*)/[^/]+$"))
-   win.fs.write(path,data)
-  end)
-  if not ok then return false,tostring(err) end
-  return true,"file"
+  local ok,data=pcall(function()return self:Export()end)
+  if not ok then return false,tostring(data) end
+  return writeRaw(name,data)
  end
  function obj:Load(name,options)
+  local raw,err=readRaw(name)
+  if not raw then return false,err end
+  return self:Import(raw,options)
+ end
+ function obj:Delete(name)
   if not validName(name) then return false,"Invalid profile name" end
-  local path=key(name) local data=memory[path]
-  if not data and win.fs then
-   local ok,txt=pcall(win.fs.read,path)
-   if ok then data=txt end
+  local file=path(name)
+  if win.fs then
+   if type(win.fs.delete)~="function" then
+    return false,"Deletion not supported by the filesystem"
+   end
+   local ok,err=pcall(win.fs.delete,file)
+   if not ok then return false,tostring(err) end
   end
-  if not data then return false,"Profile not found" end
-  return self:Import(data,options)
+  memory[file]=nil
+  return true
+ end
+ function obj:Rename(oldName,newName)
+  if not validName(oldName) or not validName(newName) then return false,"Invalid profile name" end
+  if oldName==newName then return true end
+  local raw,err=readRaw(oldName)
+  if not raw then return false,err end
+  if win.fs and type(win.fs.delete)~="function" then
+   return false,"Renaming requires filesystem deletion support"
+  end
+  local saved,why=writeRaw(newName,raw)
+  if not saved then return false,why end
+  local deleted,message=self:Delete(oldName)
+  if not deleted then return false,message end
+  return true
  end
  return obj
 end
