@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2-alpha — Unified vertical Matrix rain
+
+- Replaced edge-specific motion with a single masked falling-code backdrop.
+- All trails fall vertically, with a slow, continuous rightward drift across the full window.
+- Kept the slim bezel, dark-on-green inverse style, katakana/digits and fading head-and-tail streams.
+- Capped updates at ~10 Hz, reusing existing TextLabel instances.
+- Preserved searchable dropdowns, appearance settings and configuration APIs.
+
 ## 0.1.1-alpha — Bezel and dropdown refinement
 
 - Reduced default border from 18px to 12px; supports `BorderThickness` (9–16px).
