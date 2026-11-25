@@ -20,35 +20,35 @@ local palettes={
   raised=Color3.fromRGB(31,39,45),stroke=Color3.fromRGB(49,61,68),
   border=Color3.fromRGB(31,179,111),ink=Color3.fromRGB(8,62,40),
   accent=Color3.fromRGB(115,224,162),text=Color3.fromRGB(231,238,240),
-  muted=Color3.fromRGB(148,166,171)
+  muted=Color3.fromRGB(148,166,171),danger=Color3.fromRGB(235,132,126)
  },
  ClassicCRT={
   bg=Color3.fromRGB(12,18,15),panel=Color3.fromRGB(20,29,23),
   raised=Color3.fromRGB(28,42,32),stroke=Color3.fromRGB(48,68,53),
   border=Color3.fromRGB(26,151,83),ink=Color3.fromRGB(9,55,29),
   accent=Color3.fromRGB(111,224,147),text=Color3.fromRGB(228,240,230),
-  muted=Color3.fromRGB(147,173,151)
+  muted=Color3.fromRGB(147,173,151),danger=Color3.fromRGB(235,132,126)
  },
  AmberTerminal={
   bg=Color3.fromRGB(21,19,17),panel=Color3.fromRGB(32,28,24),
   raised=Color3.fromRGB(43,38,31),stroke=Color3.fromRGB(73,60,43),
   border=Color3.fromRGB(198,144,61),ink=Color3.fromRGB(80,54,20),
   accent=Color3.fromRGB(238,190,114),text=Color3.fromRGB(242,234,220),
-  muted=Color3.fromRGB(175,157,131)
+  muted=Color3.fromRGB(175,157,131),danger=Color3.fromRGB(235,132,126)
  },
  IceConsole={
   bg=Color3.fromRGB(13,19,25),panel=Color3.fromRGB(20,29,38),
   raised=Color3.fromRGB(29,42,53),stroke=Color3.fromRGB(50,69,82),
   border=Color3.fromRGB(62,149,196),ink=Color3.fromRGB(23,58,80),
   accent=Color3.fromRGB(145,214,242),text=Color3.fromRGB(230,238,244),
-  muted=Color3.fromRGB(152,175,187)
+  muted=Color3.fromRGB(152,175,187),danger=Color3.fromRGB(235,132,126)
  },
  Monochrome={
   bg=Color3.fromRGB(17,18,20),panel=Color3.fromRGB(27,29,32),
   raised=Color3.fromRGB(39,42,46),stroke=Color3.fromRGB(65,70,76),
   border=Color3.fromRGB(150,155,161),ink=Color3.fromRGB(51,55,60),
   accent=Color3.fromRGB(236,238,241),text=Color3.fromRGB(232,233,236),
-  muted=Color3.fromRGB(163,169,176)
+  muted=Color3.fromRGB(163,169,176),danger=Color3.fromRGB(235,132,126)
  }
 }
 Lib.Themes=palettes
@@ -139,10 +139,11 @@ function Window:_feedback(hitbox,surface,baseToken)
   if not surface.Parent then return end
   local base=self.colors[baseToken or "panel"] or self.colors.panel
   local target=base
+  local highlight=(baseToken=="accent" or baseToken=="danger") and self.colors.text or self.colors.accent
   if state=="hover" then
-   target=base:Lerp(self.colors.accent,.055)
+   target=base:Lerp(highlight,(baseToken=="accent" or baseToken=="danger") and .13 or .055)
   elseif state=="pressed" then
-   target=base:Lerp(self.colors.accent,.12)
+   target=base:Lerp(highlight,(baseToken=="accent" or baseToken=="danger") and .22 or .12)
   end
   if currentTween then currentTween:Cancel() currentTween=nil end
   local transparency=transparentIdle and (state=="normal" and 1 or (state=="pressed" and .58 or .75)) or 0
@@ -227,6 +228,11 @@ function Window:_theme(obj,property,token)
  end
  obj[property]=self.colors[token]
 end
+function Window:_refreshChrome()
+ if self.root and self.root.Parent then
+  self.root.BackgroundColor3=self.rainEnabled and self.colors.border or self.colors.stroke
+ end
+end
 function Window:SetTheme(name)
  if not palettes[name] then return false end
  if self._closeDropdown then self._closeDropdown() end
@@ -237,6 +243,7 @@ function Window:SetTheme(name)
   else table.remove(self._bound,i) end
  end
  self:_refreshFeedback()
+ self:_refreshChrome()
  if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
@@ -262,6 +269,7 @@ function Window:SetRain(enabled,density,speed)
  if type(density)=="number" then self.rainDensity=math.clamp(density,0,1) end
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
  if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
+ self:_refreshChrome()
  if self._rainColumns and self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
 end
@@ -1997,6 +2005,7 @@ function Lib:CreateWindow(o)
   ClipsDescendants=true,Active=false,ZIndex=2
  },w.root)
  w._rainLayer=rainLayer
+  rainLayer.Visible=w.rainEnabled
  local function hex(c)
   return string.format("#%02X%02X%02X",
    math.floor(c.R*255+.5),
