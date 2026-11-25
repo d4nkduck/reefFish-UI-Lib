@@ -614,6 +614,127 @@ function Window:FindControls(query,limit)
  end
  return results
 end
+function Window:CloseSearch()
+ if self._searchOverlay then
+  self._searchOverlay:Destroy()
+  self._searchOverlay=nil
+ end
+end
+function Window:_jumpToSearchResult(entry)
+ if self.destroyed or not entry or not entry.frame.Parent then return false end
+ local tab=entry.tab
+ local parent=entry.frame.Parent
+ local expand=tab._collapsibleGroups and tab._collapsibleGroups[parent]
+ if expand then expand(true) end
+ self:SelectTab(tab)
+ self:CloseSearch()
+ task.defer(function()
+  if self.destroyed or not entry.frame.Parent or not tab.page.Parent then return end
+  local y=entry.frame.AbsolutePosition.Y-tab.page.AbsolutePosition.Y
+    +tab.page.CanvasPosition.Y-14
+  tab.page.CanvasPosition=Vector2.new(0,math.max(0,y))
+ end)
+ return true
+end
+function Window:OpenSearch(initial)
+ if self.destroyed or not self.screen then return nil end
+ if self._dialog then self._dialog:Dismiss(true) end
+ self:CloseSearch()
+ if self._closeDropdown then self._closeDropdown() end
+ local viewport=self:_viewport()
+ local width=math.min(440,math.max(220,viewport.X-24))
+ local height=math.min(392,math.max(180,viewport.Y-24))
+ local overlay=make("Frame",{
+  Name="ReefFishSearch",Size=UDim2.fromScale(1,1),
+  BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=.42,
+  BorderSizePixel=0,ZIndex=200
+ },self.screen)
+ self._searchOverlay=overlay
+ local dismiss=make("TextButton",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+  Text="",BorderSizePixel=0,ZIndex=201,AutoButtonColor=false
+ },overlay)
+ local panel=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+  Size=UDim2.fromOffset(width,height),BorderSizePixel=0,ZIndex=202
+ },overlay)
+ round(panel,Design.radius.surface)
+ self:_theme(panel,"BackgroundColor3","panel")
+ local outline=make("UIStroke",{Thickness=1,Transparency=.3},panel)
+ self:_theme(outline,"Color","stroke")
+ local heading=make("TextLabel",{
+  Text="Find a setting",Position=UDim2.fromOffset(16,12),
+  Size=UDim2.new(1,-32,0,25),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,
+  TextSize=15,ZIndex=203
+ },panel)
+ self:_theme(heading,"TextColor3","text")
+ local field=make("TextBox",{
+  Position=UDim2.fromOffset(14,45),Size=UDim2.new(1,-28,0,36),
+  BackgroundColor3=self.colors.raised,TextColor3=self.colors.text,
+  PlaceholderColor3=self.colors.muted,PlaceholderText="Search tabs and settings...",
+  Text=tostring(initial or ""),ClearTextOnFocus=false,
+  Font=Enum.Font.Gotham,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0,ZIndex=203
+ },panel)
+ round(field,Design.radius.control)
+ make("UIPadding",{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)},field)
+ local resultList=make("ScrollingFrame",{
+  Position=UDim2.fromOffset(14,91),Size=UDim2.new(1,-28,1,-105),
+  BackgroundTransparency=1,BorderSizePixel=0,
+  AutomaticCanvasSize=Enum.AutomaticSize.Y,
+  CanvasSize=UDim2.new(),ScrollBarThickness=3,ZIndex=203
+ },panel)
+ make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},resultList)
+ local shown={}
+ local function refresh()
+  if not overlay.Parent then return end
+  for _,child in ipairs(resultList:GetChildren()) do
+   if child:IsA("TextButton") or child:IsA("TextLabel") then child:Destroy() end
+  end
+  table.clear(shown)
+  local hits=self:FindControls(field.Text,12)
+  for i,entry in ipairs(hits) do
+   shown[i]=entry
+   local row=make("TextButton",{
+    Text="  "..entry.title.."  ·  "..tostring(entry.tab.name or "Tab"),
+    Size=UDim2.new(1,-3,0,35),BackgroundColor3=self.colors.raised,
+    TextColor3=self.colors.text,BorderSizePixel=0,
+    Font=Enum.Font.Gotham,TextSize=Design.type.body,
+    TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,
+    AutoButtonColor=false,ZIndex=204,LayoutOrder=i
+   },resultList)
+   round(row,Design.radius.small)
+   local choice=entry
+   row.MouseButton1Click:Connect(function()self:_jumpToSearchResult(choice)end)
+  end
+  if #hits==0 then
+   local none=make("TextLabel",{
+    Text="No matching settings",
+    Size=UDim2.new(1,0,0,38),BackgroundTransparency=1,
+    TextColor3=self.colors.muted,Font=Enum.Font.Gotham,
+    TextSize=Design.type.body,ZIndex=204
+   },resultList)
+  end
+  resultList.CanvasPosition=Vector2.zero
+ end
+ local selfWindow=self
+ local handle={}
+ function handle:Dismiss()selfWindow:CloseSearch()end
+ dismiss.MouseButton1Click:Connect(function()self:CloseSearch()end)
+ field:GetPropertyChangedSignal("Text"):Connect(refresh)
+ field.FocusLost:Connect(function(enterPressed)
+  if enterPressed and shown[1] then self:_jumpToSearchResult(shown[1]) end
+ end)
+ refresh()
+ task.defer(function()
+  if overlay.Parent then field:CaptureFocus() end
+ end)
+ return handle
+end
+function Window:ToggleSearch()
+ if self._searchOverlay then self:CloseSearch() else self:OpenSearch() end
+end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
