@@ -1,8 +1,8 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.4.4-alpha  
+**Version:** 0.5.0-alpha  
 **License:** MIT  
-**Status:** Crash-mitigation alpha — in-game confirmation required
+**Status:** Feature-expansion alpha — Roblox runtime verification pending
 
 A modern Roblox Luau UI library with grouped settings, deliberate typography and an optional inverse-Matrix border. Built for game debug tooling and reusable in client-side Roblox Studio projects.
 
@@ -17,8 +17,8 @@ The interface must look complete without visual effects. Shared design tokens go
 - Draggable/resizable window with tracked mouse/touch gestures, restore-on-grow sizing, horizontal mobile tabs, minimize/close, status line and toasts
 - Slim (4 px default, configurable 3–16 px) matte frame. Inverse-Matrix border rain is available with `Rain=true` or via the Appearance tab, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
-- UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, searchable single/multi-select dropdowns, colour picker (HSV/HEX), keybinds (Press/Toggle/Hold), paragraphs and text inputs
-- Built-in Appearance and Profiles tabs with named profile management, editable accent colour and JSON import/export (unless disabled)
+- UI controls: tabs, sections, collapsible groups, labels, buttons, toggles, sliders, progress bars, status rows, virtualized searchable single/multi-select dropdowns, colour picker (HSV/HEX), keybinds (Press/Toggle/Hold), paragraphs and text inputs
+- Built-in Appearance and Profiles tabs with named profile management, editable accent colour and JSON import/export (unless disabled). Profile deletion uses a confirmation dialog
 - Grouped settings surfaces, button variants, optional descriptions, focused inputs, restrained hover feedback and themed slider handles
 - Appearance editor: theme, rain toggle, density, speed and live border thickness (3–16px)
 - Profile browsing, named save/load, rename/delete with confirmation, JSON import/export and optional debounced autosave
@@ -32,7 +32,7 @@ The interface must look complete without visual effects. Shared design tokens go
 
 ## What is planned, not implemented
 
-Still planned: full phone/tablet usability validation, accessibility and keyboard navigation for all controls, graphs, richer log drawer, notification actions, automated tests across Roblox clients, multi-window support, cross-session auto-load and custom theme import/export. The window now also restores its requested size after temporary viewport shrinkage, but real mobile testing is still outstanding.
+Still planned: full phone/tablet usability validation, complete accessibility and keyboard navigation, graphs, richer log drawer, notification actions, automated Roblox-client tests, multi-window support, cross-session auto-load, localization, and custom theme import/export. The window now also restores its requested size after temporary viewport shrinkage, but real mobile testing is still outstanding.
 
 ## Installation (Roblox Studio)
 
@@ -75,13 +75,16 @@ print(ok, reason)
 
 ## Controls API
 
-`window:CreateTab({Name="NAME"})` → tab
+`window:CreateTab({Name="NAME", Icon="rbxassetid://123"})` → tab; optional Roblox image icon and `tab:SetIcon(assetId)`.
 
-- `tab:CreateSection("TEXT")`
+- `tab:CreateSection("TEXT")` (legacy, unchanged)
+- `tab:CreateCollapsibleSection({Name="Advanced",Expanded=false})` → `:SetExpanded(bool)`, `:GetExpanded()`, `:Toggle()`, `:SetVisible(bool)`
 - `tab:CreateLabel({Text="TEXT"})` → `:SetText(text)`
 - `tab:CreateButton({Name="NAME", Variant="Secondary", Description="Optional detail", Callback=function() end})` → `:SetDisabled(bool)`. Variants: `Primary`, `Secondary` (default), `Danger`.
 - `tab:CreateToggle({Name="NAME", Description="Optional detail", Flag="unique-id", Default=false, Callback=function(bool) end})` → `:Get()`, `:Set(bool, fireCallback)`
 - `tab:CreateSlider({Name="NAME", Flag="unique-id", Min=0, Max=100, Increment=1, Default=25, Callback=function(number) end})` → `:Get()`, `:Set(number, fireCallback)`
+- `tab:CreateProgressBar({Name="Downloading",Min=0,Max=100,Default=0})` → `:Get()`, `:Set(number, animate)`, `:SetLabel(text)`
+- `tab:CreateStatus({Name="Connection",Value="Ready",Level="success"})` → `:Get()`, `:Set(value, level)`; levels `success`, `error`, `info`
 - `tab:CreateDropdown({Name="NAME", Flag="unique-id", Options={"A","B"}, Default="A", Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateInput({Name="NAME", Flag="unique-id", Default="text", Numeric=false, Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateParagraph({Title="Help", Content="Long explanation"})` → `:Set(title,content)`; auto-height is the default, and `Height=96` opts into a fixed-height card
@@ -90,7 +93,7 @@ print(ok, reason)
 - `tab:CreateKeybind({Name="Overlay key", Flag="overlay.key", Default="F6", Mode="Toggle", Callback=function(active,keyName) end})` → `:Get()`, `:Set(keyName, fireChangeCallback)`
 - `tab:CreateTextArea({Name="JSON", Height=120})` → `:Get()`, `:Set(text)`
 
-Window methods: `:SetSize(width,height)` or `:SetSize(Vector2)`, `:SetTheme(name)`, `:SetAccentColor(Color3 or hex)`, `:SetRain(enabled, density, speed)`, `:Notify(text, kind)`, `:Toast({Title,Content,Duration})`, `:SetMinimized(bool)`, `:SetHidden(bool)`, `:SelectTab(tab)`, `:Destroy()`. Most interactive component handles expose `:SetVisible(bool)`, `:SetDisabled(bool)` and `:Destroy()`.
+Window methods: `:SetIcon(robloxImageId)`, `:OpenSearch(query)`, `:CloseSearch()`, `:ToggleSearch()`, `:FindControls(query,limit)`, `:Confirm({Title,Content,ConfirmText,CancelText,Danger,OnConfirm,OnCancel})`, `:Dialog(...)`, `:GetDiagnostics()`, `:SetSize(width,height)` or `:SetSize(Vector2)`, `:SetTheme(name)`, `:SetAccentColor(Color3 or hex)`, `:SetRain(enabled, density, speed)`, `:Notify(text, kind)`, `:Toast({Title,Content,Duration})`, `:SetMinimized(bool)`, `:SetHidden(bool)`, `:SelectTab(tab)`, `:Destroy()`. Most interactive component handles expose `:SetVisible(bool)`, `:SetDisabled(bool)` and `:Destroy()`.
 
 ## Configuration API
 
@@ -135,6 +138,18 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 ## License
 
 MIT. See `LICENSE`.
+## v0.5.0 features and fish branding
+
+- Added the user-supplied transparent fish logo to [`assets/reefFish-icon.png`](assets/reefFish-icon.png) (size-optimised). The old placeholder dot has been removed from the title bar.
+- **Roblox image limitation:** a GitHub PNG cannot be used directly as a Roblox `ImageLabel.Image`. Import that PNG into Roblox Studio/Creator Dashboard, copy its image asset ID, and pass `Icon="rbxassetid://YOUR_ID"` to `CreateWindow`, or set `ReefFish.DefaultIconAsset` before creating a window. No asset ID is bundled or invented. `:SetIcon(assetId)` can update it later.
+- Optional Roblox asset icons are also available on individual tabs.
+- **Global settings search:** click the magnifying-glass button or press `Ctrl+K` on desktop. Search covers tab names, sections and registered controls; select a result to switch tabs, reveal collapsed groups and scroll to the setting. `Escape` closes it.
+- **Confirmation dialogs:** `window:Confirm({Title="Delete?",Content="...",Danger=true,OnConfirm=function() end})`; also `:Dialog(...)`. Built-in profile deletion now uses the same dialog.
+- **Collapsible groups:** `tab:CreateCollapsibleSection({Name="Advanced",Expanded=false})` wraps subsequent controls until the next section and returns an expansion handle.
+- **Progress and status rows:** low-overhead `CreateProgressBar` and `CreateStatus` components for tasks, health and diagnostic feedback.
+- **Diagnostics:** `window:GetDiagnostics()` returns read-only UI metadata, control/event counts, window size and theme without exporting user settings.
+- Existing HumuHub loaders, profile JSON format and legacy component APIs remain intact. These are alpha changes; run `examples/basic.luau` in Roblox Studio to validate rendering and input.
+
 ## v0.4.4 crash-mitigation pass
 
 - Replace nested automatic-height section groups with a measured layout height to reduce costly Roblox UI relayout cycles.
