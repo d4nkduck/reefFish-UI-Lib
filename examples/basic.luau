@@ -5,7 +5,7 @@ local ReefFish = require(game:GetService("ReplicatedStorage"):WaitForChild("Reef
 local window = ReefFish:CreateWindow({Title="reefFish UI demo",Theme="MatrixInverse"})
 local main=window:CreateTab({Name="MAIN"})
 main:CreateSection("DEMO")
-main:CreateLabel({Text="reefFish v0.4.1 resizing + input test"})
+main:CreateLabel({Text="reefFish v0.4.2 stability test"})
 main:CreateButton({Name="Ping",Callback=function()window:Notify("Pong!","OK")end})
 main:CreateToggle({Name="Show markers",Flag="markers",Default=false,Callback=function(v)print("Markers:",v)end})
 main:CreateSlider({Name="Test delay",Flag="delay",Min=0,Max=2,Increment=.05,Default=.4,Callback=function(v)print("Delay:",v)end})
@@ -30,8 +30,33 @@ main:CreateParagraph({
  Content="This paragraph should wrap and expand when the content area gets narrower. Try dragging the bottom-right corner, resizing the window and rotating the device to test the responsive layout."
 })
 local manyOptions={}
-for i=1,100 do manyOptions[i]="Option "..i end
-main:CreateDropdown({Name="100-option dropdown",Options=manyOptions,Default="Option 1"})
+for i=1,120 do manyOptions[i]="Option "..i end
+local longDropdown=main:CreateDropdown({
+ Name="120-option scroll test",Options=manyOptions,Default="Option 1",
+ Callback=function(choice)print("Selected:",choice)end
+})
+main:CreateButton({Name="Select final dropdown option",Callback=function()
+ assert(longDropdown:Set("Option 120",true),"Dropdown rejected last option")
+ window:Notify("Option 120 selected — scroll to verify it can be reached","OK")
+end})
+main:CreateButton({Name="Test destroyed-control cleanup",Callback=function()
+ local testFlag="smoke.temporary"
+ local probe=main:CreateToggle({Name="Temporary control",Flag=testFlag})
+ assert(window.flags[testFlag]==probe,"Temporary flag missing")
+ probe:Destroy()
+ -- Destroying signal behaviour may be deferred in some Roblox environments.
+ task.delay(.1,function()
+  if window.destroyed then return end
+  assert(window.flags[testFlag]==nil,"Destroyed flag still registered")
+  window:Notify("Control cleanup passed","OK")
+ end)
+end})
+main:CreateButton({Name="Test theme changes",Callback=function()
+ local initial=window.themeName
+ assert(window:SetTheme("AmberTerminal"),"Theme change failed")
+ assert(window:SetTheme(initial),"Theme restoration failed")
+ window:Notify("Theme refresh passed","OK")
+end})
 local preset=main:CreateInput({Name="Profile name",Default="default"})
 main:CreateButton({Name="Save profile",Callback=function()
  local ok,msg=window.Config:Save(preset:Get())
