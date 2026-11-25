@@ -113,7 +113,7 @@ function Window:_feedback(hitbox,surface,baseToken)
    surface.BackgroundColor3=target
   end
  end
- self._feedbackRefresh[#self._feedbackRefresh+1]={owner=surface,refresh=function()refresh(false)end}
+ self:_trackFeedback(surface,function()refresh(false)end)
  local function add(signal,fn)
   return self:_connectControl(surface,signal,fn)
  end
@@ -136,6 +136,18 @@ function Window:_connectControl(owner,signal,callback)
  end
  bucket[#bucket+1]=connection
  return connection
+end
+function Window:_trackFeedback(owner,refresh)
+ local entry={owner=owner,refresh=refresh}
+ self._feedbackRefresh[#self._feedbackRefresh+1]=entry
+ owner.Destroying:Connect(function()
+  for i=#self._feedbackRefresh,1,-1 do
+   if self._feedbackRefresh[i]==entry then
+    table.remove(self._feedbackRefresh,i)
+    break
+   end
+  end
+ end)
 end
 function Window:_refreshFeedback()
  for i=#self._feedbackRefresh,1,-1 do
@@ -536,7 +548,7 @@ function Tab:CreateToggle(o)
    knob.BackgroundColor3=knobColor
   end
  end
- w._feedbackRefresh[#w._feedbackRefresh+1]={owner=f,refresh=function()render(false)end}
+ w:_trackFeedback(f,function()render(false)end)
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
@@ -932,7 +944,7 @@ function Tab:CreateInput(o)
   outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
   outline.Transparency=box:IsFocused() and 0 or .5
  end
- w._feedbackRefresh[#w._feedbackRefresh+1]={owner=f,refresh=refreshOutline}
+ w:_trackFeedback(f,refreshOutline)
  w:_connectControl(f,box.Focused,refreshOutline)
  local handle={}
  function handle:SetDisabled(v)
