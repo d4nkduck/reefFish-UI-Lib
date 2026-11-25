@@ -277,6 +277,7 @@ function Window:_layout()
  self:_clampPosition()
 end
 function Window:SetSize(width,height)
+ if self._closeDropdown then self._closeDropdown() end
  if typeof(width)=="Vector2" then height=width.Y width=width.X end
  if type(width)=="number" and width==width then self.width=math.floor(width+.5) end
  if type(height)=="number" and height==height then self.height=math.floor(height+.5) end
@@ -665,7 +666,7 @@ function Tab:CreateDropdown(o)
    value=selected
   elseif not table.find(opts,value) then value=opts[1] end
   render()
-  if w._closeDropdown then w._closeDropdown() end
+  if w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
  end
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
   if w.destroyed or disabled then return end
@@ -676,15 +677,16 @@ function Tab:CreateDropdown(o)
   if w._closeDropdown then w._closeDropdown() end
   local overlay=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=100},w.screen)
   local dismiss=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="",AutoButtonColor=false,ZIndex=101},overlay)
+  local viewport=w:_viewport()
   local rows=math.min(#opts,6)
-  local panelHeight=math.max(82,math.min(246,rows*29+46))
-  local panelWidth=math.max(155,b.AbsoluteSize.X)
+  local panelHeight=math.min(math.max(82,math.min(246,rows*29+46)),math.max(68,viewport.Y-16))
+  local panelWidth=math.min(math.max(155,b.AbsoluteSize.X),math.max(110,viewport.X-16))
   local panel=make("Frame",{Size=UDim2.fromOffset(panelWidth,panelHeight),BorderSizePixel=0,ZIndex=102},overlay)
   panel.BackgroundColor3=w.colors.panel
   round(panel,5)
   make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.55},panel)
   local function positionPanel()
-   local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+   local viewport=w:_viewport()
    local x=math.clamp(b.AbsolutePosition.X,6,math.max(6,viewport.X-panelWidth-6))
    local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y+4
    if y+panelHeight>viewport.Y-8 then y=b.AbsolutePosition.Y-panelHeight-4 end
@@ -708,45 +710,80 @@ function Tab:CreateDropdown(o)
   },panel)
   make("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,2)},list)
   local optionButtons={}
-  local function updateList()
+  local MAX_DISPLAY=50
+  local function updateList(preserveScroll)
+   local oldPosition=preserveScroll and list.CanvasPosition or Vector2.zero
    for _,item in ipairs(optionButtons) do item:Destroy() end
    table.clear(optionButtons)
    local query=string.lower(search.Text)
+   local shown,total=0,0
    for _,option in ipairs(opts) do
     local label=tostring(option)
     if query=="" or string.find(string.lower(label),query,1,true) then
-     local chosen=option
-     local item=make("TextButton",{
-      Text=((multi and table.find(value,chosen)~=nil or chosen==value) and "✓  " or "   ")..label,
-      Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
-      TextColor3=(multi and table.find(value,chosen)~=nil or chosen==value) and w.colors.accent or w.colors.text,
-      BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
-      TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
-     },list)
-     round(item,4)
+     total+=1
+     if shown<MAX_DISPLAY then
+      shown+=1
+      local chosen=option
+      local selected=(multi and table.find(value,chosen)~=nil or chosen==value)
+      local item=make("TextButton",{
+       Text=(selected and "✓  " or "   ")..label,
+       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
+       TextColor3=selected and w.colors.accent or w.colors.text,
+       BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
+       TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
+      },list)
+      round(item,4)
+      optionButtons[#optionButtons+1]=item
       item.MouseEnter:Connect(function()
        if item.Parent then item.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
       end)
       item.MouseLeave:Connect(function()
        if item.Parent then item.BackgroundColor3=w.colors.raised end
       end)
-      optionButtons[#optionButtons+1]=item
-     item.MouseButton1Click:Connect(function()
-      if multi then
-       local nextValue=table.clone(value)
-       local index=table.find(nextValue,chosen)
-       if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
-       handle:Set(nextValue,true)
-       updateList()
-      else
-       handle:Set(chosen,true)
-       if w._closeDropdown then w._closeDropdown() end
-      end
-     end)
+      item.MouseButton1Click:Connect(function()
+       if multi then
+        local nextValue=table.clone(value)
+        local index=table.find(nextValue,chosen)
+        if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
+        handle:Set(nextValue,true)
+        updateList(true)
+       else
+        handle:Set(chosen,true)
+        if w._closeDropdown then w._closeDropdown() end
+       end
+      end)
+     end
     end
    end
-   list.CanvasPosition=Vector2.zero
+   if total==0 then
+    local empty=make("TextLabel",{
+     Text="No results",Size=UDim2.new(1,-4,0,28),
+     BackgroundTransparency=1,TextColor3=w.colors.muted,
+     Font=Enum.Font.Gotham,TextSize=12,ZIndex=105
+    },list)
+    optionButtons[#optionButtons+1]=empty
+   elseif total>shown then
+    local hint=make("TextLabel",{
+     Text="Showing "..shown.." of "..total.." — search to narrow",
+     Size=UDim2.new(1,-4,0,28),BackgroundTransparency=1,
+     TextColor3=w.colors.muted,Font=Enum.Font.Gotham,
+     TextSize=11,ZIndex=105
+    },list)
+    optionButtons[#optionButtons+1]=hint
+   end
+   list.CanvasPosition=oldPosition
   end
+  search.FocusLost:Connect(function(enterPressed)
+   if not enterPressed or multi or not overlay or not overlay.Parent then return end
+   local query=string.lower(search.Text)
+   for _,option in ipairs(opts) do
+    if query=="" or string.find(string.lower(tostring(option)),query,1,true) then
+     handle:Set(option,true)
+     if w._closeDropdown then w._closeDropdown() end
+     break
+    end
+   end
+  end)
   local positionConn=b:GetPropertyChangedSignal("AbsolutePosition"):Connect(positionPanel)
   local sizeConn=b:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionPanel)
   w._dropdownOwner=b
