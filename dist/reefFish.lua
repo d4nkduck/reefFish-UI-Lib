@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.4.0-alpha
+-- reefFish UI Lib v0.4.1-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.0-alpha"}
+local Lib={Version="0.4.1-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -93,12 +93,12 @@ end
 local Window={} Window.__index=Window
 local Tab={} Tab.__index=Tab
 -- Small, central interaction-state engine: no per-control animation loops.
-function Window:_feedback(hitbox,surface)
+function Window:_feedback(hitbox,surface,baseToken)
  local state="normal"
  local currentTween
  local function refresh(animate)
   if not surface.Parent then return end
-  local base=self.colors.panel
+  local base=self.colors[baseToken or "panel"] or self.colors.panel
   local target=base
   if state=="hover" then
    target=base:Lerp(self.colors.accent,.08)
@@ -237,11 +237,58 @@ function Window:SetHidden(value)
  self.screen.Enabled=not self.hidden
  return self.hidden
 end
+function Window:_viewport()
+ local camera=workspace.CurrentCamera
+ return camera and camera.ViewportSize or Vector2.new(1280,720)
+end
+function Window:_clampPosition()
+ if not self.root then return end
+ local viewport=self:_viewport()
+ local size=self.root.Size
+ local x=self.root.Position.X.Scale*viewport.X+self.root.Position.X.Offset
+ local y=self.root.Position.Y.Scale*viewport.Y+self.root.Position.Y.Offset
+ local margin=8
+ local maxX=math.max(margin,viewport.X-size.X.Offset-margin)
+ local maxY=math.max(margin,viewport.Y-size.Y.Offset-margin)
+ self.root.Position=UDim2.fromOffset(
+  math.floor(math.clamp(x,margin,maxX)+.5),
+  math.floor(math.clamp(y,margin,maxY)+.5)
+ )
+end
+function Window:_layout()
+ if not self.root then return end
+ local viewport=self:_viewport()
+ local maxWidth=math.max(200,math.floor(viewport.X-16))
+ local maxHeight=math.max(170,math.floor(viewport.Y-16))
+ self.width=math.clamp(self.width,math.min(330,maxWidth),maxWidth)
+ self.height=math.clamp(self.height,math.min(250,maxHeight),maxHeight)
+ local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
+ self.root.Size=UDim2.fromOffset(self.width,shownHeight)
+ if self.nav and self.content then
+  local navWidth=math.clamp(math.floor(self.width*.26),95,155)
+  if self.width<390 then navWidth=90 end
+  self.nav.Size=UDim2.new(0,navWidth,1,0)
+  self.content.Position=UDim2.fromOffset(navWidth+3,0)
+  self.content.Size=UDim2.new(1,-navWidth-3,1,0)
+  if self._navDivider then self._navDivider.Position=UDim2.fromOffset(navWidth,0) end
+ end
+ if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
+ if self._ensureRainColumns then self._ensureRainColumns(self.width) end
+ self:_clampPosition()
+end
+function Window:SetSize(width,height)
+ if self._closeDropdown then self._closeDropdown() end
+ if typeof(width)=="Vector2" then height=width.Y width=width.X end
+ if type(width)=="number" and width==width then self.width=math.floor(width+.5) end
+ if type(height)=="number" and height==height then self.height=math.floor(height+.5) end
+ self:_layout()
+ return Vector2.new(self.width,self.height)
+end
 function Window:SetMinimized(value)
  self.minimized=value==true
  if self._closeDropdown then self._closeDropdown() end
  self.body.Visible=not self.minimized
- self.root.Size=UDim2.fromOffset(self.width,self.minimized and (42+self.borderThickness*2) or self.height)
+ self:_layout()
 end
 function Window:SelectTab(tab)
  if not tab then return end
@@ -278,7 +325,8 @@ function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
   Text="  "..tostring(name),Size=UDim2.new(1,-10,0,32),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.GothamMedium,TextSize=12,
+  TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
  },self.nav)
  round(button,5)
@@ -619,7 +667,7 @@ function Tab:CreateDropdown(o)
    value=selected
   elseif not table.find(opts,value) then value=opts[1] end
   render()
-  if w._closeDropdown then w._closeDropdown() end
+  if w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
  end
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
   if w.destroyed or disabled then return end
@@ -630,15 +678,16 @@ function Tab:CreateDropdown(o)
   if w._closeDropdown then w._closeDropdown() end
   local overlay=make("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=100},w.screen)
   local dismiss=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text="",AutoButtonColor=false,ZIndex=101},overlay)
+  local viewport=w:_viewport()
   local rows=math.min(#opts,6)
-  local panelHeight=math.max(82,math.min(246,rows*29+46))
-  local panelWidth=math.max(155,b.AbsoluteSize.X)
+  local panelHeight=math.min(math.max(82,math.min(246,rows*29+46)),math.max(68,viewport.Y-16))
+  local panelWidth=math.min(math.max(155,b.AbsoluteSize.X),math.max(110,viewport.X-16))
   local panel=make("Frame",{Size=UDim2.fromOffset(panelWidth,panelHeight),BorderSizePixel=0,ZIndex=102},overlay)
   panel.BackgroundColor3=w.colors.panel
   round(panel,5)
   make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.55},panel)
   local function positionPanel()
-   local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+   local viewport=w:_viewport()
    local x=math.clamp(b.AbsolutePosition.X,6,math.max(6,viewport.X-panelWidth-6))
    local y=b.AbsolutePosition.Y+b.AbsoluteSize.Y+4
    if y+panelHeight>viewport.Y-8 then y=b.AbsolutePosition.Y-panelHeight-4 end
@@ -662,45 +711,80 @@ function Tab:CreateDropdown(o)
   },panel)
   make("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,2)},list)
   local optionButtons={}
-  local function updateList()
+  local MAX_DISPLAY=50
+  local function updateList(preserveScroll)
+   local oldPosition=preserveScroll and list.CanvasPosition or Vector2.zero
    for _,item in ipairs(optionButtons) do item:Destroy() end
    table.clear(optionButtons)
    local query=string.lower(search.Text)
+   local shown,total=0,0
    for _,option in ipairs(opts) do
     local label=tostring(option)
     if query=="" or string.find(string.lower(label),query,1,true) then
-     local chosen=option
-     local item=make("TextButton",{
-      Text=((multi and table.find(value,chosen)~=nil or chosen==value) and "✓  " or "   ")..label,
-      Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
-      TextColor3=(multi and table.find(value,chosen)~=nil or chosen==value) and w.colors.accent or w.colors.text,
-      BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
-      TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
-     },list)
-     round(item,4)
+     total+=1
+     if shown<MAX_DISPLAY then
+      shown+=1
+      local chosen=option
+      local selected=(multi and table.find(value,chosen)~=nil or chosen==value)
+      local item=make("TextButton",{
+       Text=(selected and "✓  " or "   ")..label,
+       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
+       TextColor3=selected and w.colors.accent or w.colors.text,
+       BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
+       TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
+      },list)
+      round(item,4)
+      optionButtons[#optionButtons+1]=item
       item.MouseEnter:Connect(function()
        if item.Parent then item.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
       end)
       item.MouseLeave:Connect(function()
        if item.Parent then item.BackgroundColor3=w.colors.raised end
       end)
-      optionButtons[#optionButtons+1]=item
-     item.MouseButton1Click:Connect(function()
-      if multi then
-       local nextValue=table.clone(value)
-       local index=table.find(nextValue,chosen)
-       if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
-       handle:Set(nextValue,true)
-       updateList()
-      else
-       handle:Set(chosen,true)
-       if w._closeDropdown then w._closeDropdown() end
-      end
-     end)
+      item.MouseButton1Click:Connect(function()
+       if multi then
+        local nextValue=table.clone(value)
+        local index=table.find(nextValue,chosen)
+        if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
+        handle:Set(nextValue,true)
+        updateList(true)
+       else
+        handle:Set(chosen,true)
+        if w._closeDropdown then w._closeDropdown() end
+       end
+      end)
+     end
     end
    end
-   list.CanvasPosition=Vector2.zero
+   if total==0 then
+    local empty=make("TextLabel",{
+     Text="No results",Size=UDim2.new(1,-4,0,28),
+     BackgroundTransparency=1,TextColor3=w.colors.muted,
+     Font=Enum.Font.Gotham,TextSize=12,ZIndex=105
+    },list)
+    optionButtons[#optionButtons+1]=empty
+   elseif total>shown then
+    local hint=make("TextLabel",{
+     Text="Showing "..shown.." of "..total.." — search to narrow",
+     Size=UDim2.new(1,-4,0,28),BackgroundTransparency=1,
+     TextColor3=w.colors.muted,Font=Enum.Font.Gotham,
+     TextSize=11,ZIndex=105
+    },list)
+    optionButtons[#optionButtons+1]=hint
+   end
+   list.CanvasPosition=oldPosition
   end
+  search.FocusLost:Connect(function(enterPressed)
+   if not enterPressed or multi or not overlay or not overlay.Parent then return end
+   local query=string.lower(search.Text)
+   for _,option in ipairs(opts) do
+    if query=="" or string.find(string.lower(tostring(option)),query,1,true) then
+     handle:Set(option,true)
+     if w._closeDropdown then w._closeDropdown() end
+     break
+    end
+   end
+  end)
   local positionConn=b:GetPropertyChangedSignal("AbsolutePosition"):Connect(positionPanel)
   local sizeConn=b:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionPanel)
   w._dropdownOwner=b
@@ -727,9 +811,14 @@ function Tab:CreateMultiDropdown(o)
  return self:CreateDropdown(o)
 end
 function Tab:CreateInput(o)
+ o=o or {}
  local w=self.window
  local f=self:_base(63)
- local name=make("TextLabel",{Text=tostring(o.Name or "Input"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local name=make("TextLabel",{
+  Text=tostring(o.Name or "Input"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(10,0),
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
  w:_theme(name,"TextColor3","text")
  local box=make("TextBox",{
   Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),
@@ -741,34 +830,64 @@ function Tab:CreateInput(o)
  w:_theme(box,"TextColor3","text")
  w:_theme(box,"BackgroundColor3","raised")
  w:_theme(box,"PlaceholderColor3","muted")
- local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.45},box)
- w._connections[#w._connections+1]=box.Focused:Connect(function()
-  outline.Color=w.colors.accent outline.Transparency=0
- end)
+ local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.5},box)
+ local disabled=false
+ local lastCommitted=box.Text
+ local function refreshOutline()
+  if not box.Parent then return end
+  outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
+  outline.Transparency=box:IsFocused() and 0 or .5
+ end
+ w._feedbackRefresh[#w._feedbackRefresh+1]=refreshOutline
+ w._connections[#w._connections+1]=box.Focused:Connect(refreshOutline)
  local handle={}
- function handle:SetDisabled(v)box.TextEditable=v~=true end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  box.TextEditable=not disabled
+  box.TextTransparency=disabled and .55 or 0
+  name.TextTransparency=disabled and .5 or 0
+  if disabled and box:IsFocused() then box:ReleaseFocus() end
+ end
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  function handle:Get()return box.Text end
+ function handle:Focus()
+  if not disabled and box.Parent then box:CaptureFocus() end
+ end
  function handle:Set(v,notify)
-  if o.Numeric and tonumber(v)==nil then return end
-  box.Text=tostring(v)
-  if notify then w:_markChanged("game") fire(o.Callback,box.Text) end
+  if o.Numeric and tonumber(v)==nil then return false end
+  local nextValue=tostring(v)
+  local changed=nextValue~=lastCommitted
+  box.Text=nextValue
+  lastCommitted=nextValue
+  if notify and changed then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,nextValue)
+  end
+  return true
  end
  w._connections[#w._connections+1]=box.FocusLost:Connect(function()
-  outline.Color=w.colors.muted outline.Transparency=.45
-  if not o.Numeric or tonumber(box.Text) then
-   if o.Flag then w:_markChanged("game") end
-   fire(o.Callback,box.Text)
+  refreshOutline()
+  if disabled then return end
+  if o.Numeric and tonumber(box.Text)==nil then
+   box.Text=lastCommitted
+   outline.Color=Color3.fromRGB(240,120,120)
+   outline.Transparency=0
+   w:Notify("Enter a valid number for "..tostring(o.Name or "Input"),"WARN")
+   return
   end
+  handle:Set(box.Text,true)
  end)
- w:_register(o.Flag,handle) return handle
+ w:_register(o.Flag,handle)
+ return handle
 end
 -- A readable paragraph card for long help or diagnostic descriptions.
 function Tab:CreateParagraph(o)
  o=o or {}
  local w=self.window
- local f=self:_base(math.clamp(tonumber(o.Height) or 82,56,220))
+ local fixedHeight=tonumber(o.Height)
+ local autoHeight=fixedHeight==nil
+ local f=self:_base(fixedHeight and math.clamp(fixedHeight,56,220) or 56)
  local heading=make("TextLabel",{
   Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
@@ -776,12 +895,23 @@ function Tab:CreateParagraph(o)
  },f)
  w:_theme(heading,"TextColor3","accent")
  local content=make("TextLabel",{
-  Position=UDim2.fromOffset(10,30),Size=UDim2.new(1,-20,1,-36),
+  Position=UDim2.fromOffset(10,30),
+  Size=autoHeight and UDim2.new(1,-20,0,0) or UDim2.new(1,-20,1,-36),
+  AutomaticSize=autoHeight and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
   TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
   Font=Enum.Font.Gotham,TextSize=12,Text=tostring(o.Content or "")
  },f)
  w:_theme(content,"TextColor3","text")
+ local function updateHeight()
+  if autoHeight and f.Parent then
+   f.Size=UDim2.new(1,-4,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
+  end
+ end
+ if autoHeight then
+  w._connections[#w._connections+1]=content:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHeight)
+  task.defer(updateHeight)
+ end
  local handle={}
  function handle:Set(title,body)
   if type(title)=="table" then
@@ -791,6 +921,7 @@ function Tab:CreateParagraph(o)
    heading.Text=tostring(title or heading.Text)
    if body~=nil then content.Text=tostring(body) end
   end
+  if autoHeight then task.defer(updateHeight) end
  end
  function handle:Get()return {Title=heading.Text,Content=content.Text}end
  function handle:SetVisible(v)f.Visible=v~=false end
@@ -1442,7 +1573,7 @@ function Lib:CreateWindow(o)
   round(b,5)
   w:_theme(b,"BackgroundColor3","raised")
   w:_theme(b,"TextColor3","text")
-  w:_feedback(b,b)
+  w:_feedback(b,b,"raised")
  end
  w.body=make("Frame",{Position=UDim2.fromOffset(0,42),Size=UDim2.new(1,0,1,-66),BackgroundTransparency=1,ZIndex=6},inner)
  w.nav=make("ScrollingFrame",{
@@ -1460,6 +1591,7 @@ function Lib:CreateWindow(o)
   Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
   BorderSizePixel=0,ZIndex=7,Active=false
  },w.body)
+ w._navDivider=navDivider
  w:_theme(navDivider,"BackgroundColor3","raised")
  w.content=make("Frame",{
   Size=UDim2.new(.74,-3,1,0),Position=UDim2.new(.26,3,0,0),
@@ -1472,6 +1604,15 @@ function Lib:CreateWindow(o)
   TextSize=11,ZIndex=6
  },inner)
  w:_theme(w._status,"TextColor3","muted")
+ w._resizeGrip=make("TextButton",{
+  Name="ResizeGrip",Size=UDim2.fromOffset(24,24),
+  Position=UDim2.new(1,-24,1,-24),
+  BackgroundTransparency=1,Text="◢",
+  Font=Enum.Font.Gotham,TextSize=15,
+  TextColor3=w.colors.muted,AutoButtonColor=false,
+  BorderSizePixel=0,ZIndex=20
+ },inner)
+ w:_theme(w._resizeGrip,"TextColor3","muted")
  w._toastLayer=make("Frame",{
   Position=UDim2.new(1,-299,1,-250),Size=UDim2.fromOffset(280,225),
   BackgroundTransparency=1,BorderSizePixel=0,ZIndex=175
@@ -1513,19 +1654,70 @@ function Lib:CreateWindow(o)
  end)
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
- local drag=false local dragStart,startPos
+ -- Touch and mouse dragging share a single tracked gesture.
+ local dragStart,startPos,resizeStart,startWidth,startHeight
+ local dragTouch,resizeTouch
+ local dragging,resizing=false,false
+ local function isPointer(i)
+  return i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch
+ end
  w._connections[#w._connections+1]=top.InputBegan:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=true dragStart=i.Position startPos=w.root.Position end
+  if not isPointer(i) or resizing or w.destroyed then return end
+  -- Title-bar actions shouldn't initiate dragging.
+  local pos=i.Position
+  local minX=min.AbsolutePosition.X
+  local closeX=close.AbsolutePosition.X
+  if (pos.X>=minX and pos.X<=minX+min.AbsoluteSize.X)
+   or (pos.X>=closeX and pos.X<=closeX+close.AbsoluteSize.X) then return end
+  dragging=true
+  dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+  dragStart=i.Position
+  startPos=w.root.Position
+ end)
+ w._connections[#w._connections+1]=w._resizeGrip.InputBegan:Connect(function(i)
+  if not isPointer(i) or w.minimized or dragging or w.destroyed then return end
+  resizing=true
+  resizeTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+  resizeStart=i.Position
+  startWidth,startHeight=w.width,w.height
  end)
  w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end
- end)
- w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
-   local diff=i.Position-dragStart
-   w.root.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+diff.X,startPos.Y.Scale,startPos.Y.Offset+diff.Y)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 then
+   dragging=false resizing=false dragTouch=nil resizeTouch=nil
+  elseif i.UserInputType==Enum.UserInputType.Touch then
+   if i==dragTouch then dragging=false dragTouch=nil end
+   if i==resizeTouch then resizing=false resizeTouch=nil end
   end
  end)
+ w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
+  local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
+  if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
+   local diff=i.Position-dragStart
+   w.root.Position=UDim2.fromOffset(startPos.X.Offset+diff.X,startPos.Y.Offset+diff.Y)
+   w:_clampPosition()
+  elseif resizing and (mouseMove and resizeTouch==nil or i==resizeTouch) then
+   local diff=i.Position-resizeStart
+   w:SetSize(startWidth+diff.X,startHeight+diff.Y)
+  end
+ end)
+ -- Fit the window to the viewport initially and on display rotation/resize.
+ local function connectViewport(camera)
+  if w._viewportConnection then w._viewportConnection:Disconnect() end
+  w._viewportConnection=nil
+  if camera then
+   w._viewportConnection=camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    w:_layout()
+   end)
+  end
+  w:_layout()
+ end
+ w._connections[#w._connections+1]=workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+  connectViewport(workspace.CurrentCamera)
+ end)
+ w._connections[#w._connections+1]=w.screen.Destroying:Connect(function()
+  if w._viewportConnection then w._viewportConnection:Disconnect() w._viewportConnection=nil end
+ end)
+ connectViewport(workspace.CurrentCamera)
  -- reefFish v0.1.3: full-window VERTICAL matrix rain, with a border mask.
  -- This intentionally looks like a conventional rain wallpaper:
  -- every column falls DOWN only, its tail fading from pale ink to near-black.
@@ -1542,8 +1734,8 @@ function Lib:CreateWindow(o)
   "ル","レ","ロ","ワ","ヲ","ン"}
  local cell=10
  local spacing=9
- local count=math.ceil(w.width/spacing)+4
- local fieldPeriod=count*spacing
+ local count=0
+ local fieldPeriod=spacing
  local streams={}
  local rainLayer=make("Frame",{
   Name="MatrixWallpaper",
@@ -1578,30 +1770,37 @@ function Lib:CreateWindow(o)
   end
   stream.label.Text=table.concat(lines,"\n")
  end
- for col=1,count do
-  local length=math.random(8,14)
-  local label=make("TextLabel",{
-   Name="RainColumn",
-   Size=UDim2.fromOffset(cell,length*cell+10),
-   Position=UDim2.fromOffset((col-2)*spacing,-length*cell),
-   BackgroundTransparency=1,BorderSizePixel=0,
-   Font=Enum.Font.Code,TextSize=10,LineHeight=1,
-   TextXAlignment=Enum.TextXAlignment.Center,
-   TextYAlignment=Enum.TextYAlignment.Top,
-   RichText=true,TextWrapped=false,TextScaled=false,
-   Text="0",ZIndex=3
-  },rainLayer)
-  local stream={
-   label=label,length=length,
-   y=math.random(-w.height,w.height),
-   x=(col-2)*spacing,
-   speed=math.random(25,60),
-   change=math.random(),
-   seed=col,glyphs={}
-  }
-  streams[col]=stream
-  updateText(stream,true)
+ local function ensureRainColumns(width)
+  local required=math.ceil(width/spacing)+4
+  for col=count+1,required do
+   local length=math.random(8,14)
+   local label=make("TextLabel",{
+    Name="RainColumn",
+    Size=UDim2.fromOffset(cell,length*cell+10),
+    Position=UDim2.fromOffset((col-2)*spacing,-length*cell),
+    BackgroundTransparency=1,BorderSizePixel=0,
+    Font=Enum.Font.Code,TextSize=10,LineHeight=1,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    TextYAlignment=Enum.TextYAlignment.Top,
+    RichText=true,TextWrapped=false,TextScaled=false,
+    Text="0",ZIndex=3
+   },rainLayer)
+   local stream={
+    label=label,length=length,
+    y=math.random(-w.height,w.height),
+    x=(col-2)*spacing,
+    speed=math.random(25,60),
+    change=math.random(),
+    seed=col,glyphs={}
+   }
+   streams[col]=stream
+   updateText(stream,true)
+  end
+  count=math.max(count,required)
+  fieldPeriod=count*spacing
  end
+ w._ensureRainColumns=ensureRainColumns
+ ensureRainColumns(w.width)
  w._rainColumns=streams
  w._repaintRain=function()
   for _,stream in ipairs(streams) do updateText(stream) end
@@ -1609,9 +1808,12 @@ function Lib:CreateWindow(o)
  local elapsedBuffer=0
  local drift=0
  w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function(dt)
-  if w.destroyed or not w.rainEnabled or w.minimized then return end
+  if w.destroyed or not w.rainEnabled or w.minimized or w.hidden or not w.screen.Enabled then
+   elapsedBuffer=0
+   return
+  end
   elapsedBuffer+=dt
-  if elapsedBuffer<.07 then return end -- at most 14 updates/second
+  if elapsedBuffer<.10 then return end -- at most 10 updates/second
   local elapsed=math.min(elapsedBuffer,.20)
   elapsedBuffer=0
   local width=w.root.AbsoluteSize.X
@@ -1630,7 +1832,7 @@ function Lib:CreateWindow(o)
    stream.change=stream.change+elapsed
    if stream.change>=.26 then
     stream.change=stream.change-.26
-    updateText(stream)
+    if stream.label.Visible then updateText(stream) end
    end
    local x=((stream.x+drift+spacing)%fieldPeriod)-spacing
    stream.label.Position=UDim2.fromOffset(math.floor(x),math.floor(stream.y-stream.length*cell))
