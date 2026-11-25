@@ -459,18 +459,22 @@ function Tab:CreateSlider(o)
  },f)
  w:_theme(valueLabel,"TextColor3","accent")
  local bar=make("TextButton",{
-  Size=UDim2.new(1,-22,0,6),Position=UDim2.fromOffset(11,36),
-  BorderSizePixel=0,Text="",AutoButtonColor=false
+  Size=UDim2.new(1,-22,0,18),Position=UDim2.fromOffset(11,30),
+  BackgroundTransparency=1,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
- w:_theme(bar,"BackgroundColor3","raised")
- round(bar,3)
- local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},bar)
+ local track=make("Frame",{
+  Position=UDim2.fromOffset(0,6),Size=UDim2.new(1,0,0,6),
+  BorderSizePixel=0,Active=false
+ },bar)
+ w:_theme(track,"BackgroundColor3","raised")
+ round(track,3)
+ local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},track)
  w:_theme(fill,"BackgroundColor3","accent")
  round(fill,3)
  local thumb=make("Frame",{
   AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(0,.5),
   Size=UDim2.fromOffset(12,12),BorderSizePixel=0,Active=false
- },bar)
+ },track)
  w:_theme(thumb,"BackgroundColor3","accent")
  round(thumb,6)
  local handle={}
