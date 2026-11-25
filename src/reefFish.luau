@@ -601,6 +601,7 @@ function Tab:CreateSlider(o)
   return true
  end
  local dragging=false
+ local dragTouch=nil
  local function updateFromPosition(pos)
   if disabled or not f.Parent then return end
   local fraction=math.clamp((pos.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
@@ -609,17 +610,25 @@ function Tab:CreateSlider(o)
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
    if not disabled then
-    dragging=true
-    updateFromPosition(i.Position)
+    if not dragging then
+     dragging=true
+     dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+     updateFromPosition(i.Position)
+    end
    end
   end
  end)
- w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
+ w:_connectControl(f,UIS.InputEnded,function(i)
+  if (dragTouch==nil and i.UserInputType==Enum.UserInputType.MouseButton1)
+   or (dragTouch~=nil and i==dragTouch) then
+   dragging=false
+   dragTouch=nil
+  end
  end)
- w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if not f.Parent then dragging=false return end
-  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+ w:_connectControl(f,UIS.InputChanged,function(i)
+  if not f.Parent then dragging=false dragTouch=nil return end
+  local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
+  if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
    updateFromPosition(i.Position)
   end
  end)
@@ -1139,6 +1148,7 @@ function Tab:CreateColorPicker(o)
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  local dragging=nil
+ local dragTouch=nil
  local function applyInput(which,pos)
   if disabled or not expanded or not f.Parent then return end
   if which=="sv" then
@@ -1153,23 +1163,34 @@ function Tab:CreateColorPicker(o)
  end
  w._connections[#w._connections+1]=picker.InputBegan:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-   dragging="sv" applyInput(dragging,i.Position)
+   if not dragging then
+    dragging="sv"
+    dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+    applyInput(dragging,i.Position)
+   end
   end
  end)
  w._connections[#w._connections+1]=hueBar.InputBegan:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-   dragging="hue" applyInput(dragging,i.Position)
+   if not dragging then
+    dragging="hue"
+    dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+    applyInput(dragging,i.Position)
+   end
   end
  end)
- w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if not f.Parent then dragging=nil return end
-  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+ w:_connectControl(f,UIS.InputChanged,function(i)
+  if not f.Parent then dragging=nil dragTouch=nil return end
+  local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
+  if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
    applyInput(dragging,i.Position)
   end
  end)
- w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+ w:_connectControl(f,UIS.InputEnded,function(i)
+  if (dragTouch==nil and i.UserInputType==Enum.UserInputType.MouseButton1)
+   or (dragTouch~=nil and i==dragTouch) then
    dragging=nil
+   dragTouch=nil
   end
  end)
  w._connections[#w._connections+1]=hex.Focused:Connect(function()outline.Color=w.colors.accent outline.Transparency=0 end)
@@ -1242,9 +1263,15 @@ function Tab:CreateKeybind(o)
  end
  function handle:SetDisabled(v)disabled=v==true button.TextTransparency=disabled and .6 or 0 end
  function handle:SetVisible(v)f.Visible=v~=false end
- function handle:Destroy()
+ local function releaseKeybind()
   if w._bindingCapture==handle then w._bindingCapture=nil end
-  for i=#w._keybinds,1,-1 do if w._keybinds[i]==handle then table.remove(w._keybinds,i) end end
+  for i=#w._keybinds,1,-1 do
+   if w._keybinds[i]==handle then table.remove(w._keybinds,i) end
+  end
+ end
+ f.Destroying:Connect(releaseKeybind)
+ function handle:Destroy()
+  releaseKeybind()
   f:Destroy()
  end
  function handle:_input(down)
