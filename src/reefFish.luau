@@ -455,7 +455,8 @@ function Window:SelectTab(tab)
   local selected=t==tab
   t.page.Visible=selected
   t.button.BackgroundColor3=selected and self.colors.raised or self.colors.bg
-  t.button.TextColor3=selected and self.colors.accent or self.colors.muted
+  t.button.TextColor3=selected and self.colors.text or self.colors.muted
+  t.button.Font=selected and Enum.Font.GothamBold or Enum.Font.GothamMedium
   if t.indicator then t.indicator.Visible=selected end
  end
  self.active=tab
@@ -528,10 +529,14 @@ function Window:CreateTab(opts)
  self.tabs[#self.tabs+1]=t
  self._connections[#self._connections+1]=button.MouseButton1Click:Connect(function()self:SelectTab(t)end)
  self._connections[#self._connections+1]=button.MouseEnter:Connect(function()
-  if self.active~=t then button.BackgroundColor3=self.colors.panel end
+  if self.active~=t then
+   TweenService:Create(button,TweenInfo.new(.13),{BackgroundColor3=self.colors.panel}):Play()
+  end
  end)
  self._connections[#self._connections+1]=button.MouseLeave:Connect(function()
-  if self.active~=t then button.BackgroundColor3=self.colors.bg end
+  if self.active~=t then
+   TweenService:Create(button,TweenInfo.new(.13),{BackgroundColor3=self.colors.bg}):Play()
+  end
  end)
  if #self.tabs==1 then self:SelectTab(t) end
  return t
@@ -1195,7 +1200,7 @@ function Tab:CreateParagraph(o)
  w:_theme(content,"TextColor3","muted")
  local function updateHeight()
   if autoHeight and f.Parent then
-   f.Size=UDim2.new(1,-4,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
+   f.Size=UDim2.new(1,f.Parent==self.page and -4 or 0,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
   end
  end
  if autoHeight then
@@ -1341,7 +1346,7 @@ function Tab:CreateColorPicker(o)
  local handle={}
  local function setExpanded(v)
   expanded=v==true
-  f.Size=UDim2.new(1,self._group and 0 or -4,0,expanded and 230 or Design.height.toggle)
+  f.Size=UDim2.new(1,f.Parent==self.page and -4 or 0,0,expanded and 230 or Design.height.toggle)
   heading.Text=tostring(o.Name or "Colour picker")..(expanded and "  ▴" or "  ▾")
   picker.Visible=expanded
   hueBar.Visible=expanded
@@ -1741,7 +1746,7 @@ local function configObject(win,kind)
  return obj
 end
 function Window:_profileManager(tab,kind,store,onImported)
- local title=kind=="appearance" and "APPEARANCE PROFILES" or "GAME PROFILES"
+ local title=kind=="appearance" and "Saved appearance" or "Game profiles"
  tab:CreateSection(title)
  local storageLabel=tab:CreateLabel({Text="Storage: "..(self.StorageMode=="file" and "local files" or "session memory only")})
  local profile=tab:CreateInput({Name="Profile name",Default="default",Placeholder="Letters, numbers, - and _"})
@@ -1812,7 +1817,7 @@ function Window:_profileManager(tab,kind,store,onImported)
   w._autosaveDue[kind]=nil
   w:Notify(enabled and ("Auto-save to "..name.." enabled") or "Auto-save disabled","INFO")
  end})
- tab:CreateSection("JSON IMPORT / EXPORT")
+ tab:CreateSection("Import & export")
  local payload=tab:CreateTextArea({Name="Profile JSON",Height=125,Placeholder="Exported JSON appears here. Paste JSON here to import."})
  tab:CreateButton({Name="Export values to JSON",Callback=function()
   local ok,value=pcall(function()return store:Export()end)
@@ -2211,8 +2216,8 @@ function Lib:CreateWindow(o)
   end
  end)
  if not o.HideBuiltins then
-  local appearance=w:CreateTab({Name="APPEARANCE"})
-  appearance:CreateSection("CONSOLE STYLE")
+  local appearance=w:CreateTab({Name="Appearance"})
+  appearance:CreateSection("Theme & display")
   local theme=appearance:CreateDropdown({
    Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},
    Default=w.themeName,Callback=function(value)w:SetTheme(value)end
@@ -2222,7 +2227,7 @@ function Lib:CreateWindow(o)
    Callback=function(c)w:SetAccentColor(c)end
   })
   local rain=appearance:CreateToggle({
-   Name="Matrix rain",Default=w.rainEnabled,
+   Name="Matrix rain",Description="Optional animated border effect",Default=w.rainEnabled,
    Callback=function(value)w:SetRain(value)end
   })
   local density=appearance:CreateSlider({
@@ -2248,8 +2253,8 @@ function Lib:CreateWindow(o)
    border:Set(w.borderThickness)
   end
   w:_profileManager(appearance,"appearance",w.Appearance,syncAppearance)
-  local config=w:CreateTab({Name="CONFIG"})
-  config:CreateLabel({Text="Profiles are isolated by game.GameId. Loading restores values, not callbacks."})
+  local config=w:CreateTab({Name="Profiles"})
+  config:CreateLabel({Text="Save settings for this game. Loading a profile restores values without running actions."})
   w:_profileManager(config,"game",w.Config)
  end
  return w
