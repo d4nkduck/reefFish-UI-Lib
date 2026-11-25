@@ -173,6 +173,15 @@ function Window:SetBorderThickness(value)
 end
 function Window:_theme(obj,property,token)
  self._bound[#self._bound+1]={obj,property,token}
+ if not self._boundOwners[obj] then
+  self._boundOwners[obj]=true
+  obj.Destroying:Connect(function()
+   self._boundOwners[obj]=nil
+   for i=#self._bound,1,-1 do
+    if self._bound[i][1]==obj then table.remove(self._bound,i) end
+   end
+  end)
+ end
  obj[property]=self.colors[token]
 end
 function Window:SetTheme(name)
@@ -412,7 +421,7 @@ end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
-  Text="  "..tostring(name),
+  Text="  "..tostring(name),LayoutOrder=#self.tabs+1,
   Size=self._compactNav and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32),
   Font=Enum.Font.GothamMedium,TextSize=12,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
@@ -1656,7 +1665,7 @@ function Lib:CreateWindow(o)
   requestedWidth=initialWidth,requestedHeight=initialHeight,
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
   rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
-  flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
+  flags={},tabs={},_bound={},_boundOwners={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
   fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16),
