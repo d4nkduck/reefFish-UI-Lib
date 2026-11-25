@@ -609,24 +609,40 @@ function Tab:_base(height,searchLabel)
 end
 function Tab:CreateSection(name)
  local w=self.window
+ local opts=type(name)=="table" and name or nil
+ local title=tostring(opts and (opts.Name or opts.Title) or name or "Section")
+ local collapsible=opts~=nil and opts.Collapsible==true
  self._layoutOrder=(self._layoutOrder or 0)+1
  local f=make("Frame",{
   Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1,
   BorderSizePixel=0,LayoutOrder=self._layoutOrder
  },self.page)
- local label=make("TextLabel",{
+ local label=make(collapsible and "TextButton" or "TextLabel",{
   BackgroundTransparency=1,Size=UDim2.new(1,-18,1,0),
-  Position=UDim2.fromOffset(7,0),Text=tostring(name),
-  Font=Enum.Font.GothamBold,TextSize=Design.type.section,
-  TextXAlignment=Enum.TextXAlignment.Left
+  Position=UDim2.fromOffset(7,0),
+  Text=title,Font=Enum.Font.GothamBold,TextSize=Design.type.section,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  TextTruncate=Enum.TextTruncate.AtEnd,
+  BorderSizePixel=0
  },f)
  w:_theme(label,"TextColor3","muted")
+ local chevron
+ if collapsible then
+  label.Size=UDim2.new(1,-46,1,0)
+  chevron=make("TextLabel",{
+   Position=UDim2.new(1,-28,0,0),Size=UDim2.fromOffset(20,30),
+   BackgroundTransparency=1,Font=Enum.Font.GothamBold,
+   TextSize=14,ZIndex=7
+  },f)
+  w:_theme(chevron,"TextColor3","muted")
+ end
  self._layoutOrder+=1
- -- Explicit height avoids nested AutomaticSize layout feedback with
- -- ScrollingFrame.AutomaticCanvasSize on some Roblox client builds.
+ -- Explicit height avoids nested AutomaticSize cycles.
  local group=make("Frame",{
-  Size=UDim2.new(1,-4,0,8),AutomaticSize=Enum.AutomaticSize.None,
-  BackgroundTransparency=0,BorderSizePixel=0,LayoutOrder=self._layoutOrder
+  Size=UDim2.new(1,-4,0,8),
+  AutomaticSize=Enum.AutomaticSize.None,
+  BackgroundTransparency=0,BorderSizePixel=0,
+  LayoutOrder=self._layoutOrder
  },self.page)
  round(group,Design.radius.surface)
  w:_theme(group,"BackgroundColor3","panel")
@@ -650,7 +666,41 @@ function Tab:CreateSection(name)
  task.defer(updateGroupHeight)
  self._group=group
  self._groupOrder=0
- return f
+ w:_indexControl(self,f,title)
+ if not collapsible then return f end
+ self._collapsibleGroups=self._collapsibleGroups or {}
+ local expanded=opts.Expanded~=false
+ local function setExpanded(v)
+  expanded=v==true
+  if group.Parent then group.Visible=expanded end
+  if chevron.Parent then chevron.Text=expanded and "⌄" or "›" end
+ end
+ self._collapsibleGroups[group]=setExpanded
+ group.Destroying:Connect(function()
+  self._collapsibleGroups[group]=nil
+ end)
+ w:_connectControl(f,label.MouseButton1Click,function()
+  setExpanded(not expanded)
+ end)
+ setExpanded(expanded)
+ local handle={}
+ function handle:SetExpanded(v)setExpanded(v)end
+ function handle:GetExpanded()return expanded end
+ function handle:Toggle()setExpanded(not expanded)end
+ function handle:SetVisible(v)
+  f.Visible=v~=false
+  group.Visible=f.Visible and expanded
+ end
+ function handle:Destroy()
+  if group.Parent then group:Destroy() end
+  if f.Parent then f:Destroy() end
+ end
+ return handle
+end
+function Tab:CreateCollapsibleSection(o)
+ o=type(o)=="table" and table.clone(o) or {Name=tostring(o)}
+ o.Collapsible=true
+ return self:CreateSection(o)
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
