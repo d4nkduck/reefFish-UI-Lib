@@ -1,8 +1,8 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.4.3-alpha  
+**Version:** 0.4.4-alpha  
 **License:** MIT  
-**Status:** Visual system alpha — existing component APIs remain compatible
+**Status:** Crash-mitigation alpha — in-game confirmation required
 
 A modern Roblox Luau UI library with grouped settings, deliberate typography and an optional inverse-Matrix border. Built for game debug tooling and reusable in client-side Roblox Studio projects.
 
@@ -135,6 +135,14 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 ## License
 
 MIT. See `LICENSE`.
+## v0.4.4 crash-mitigation pass
+
+- Replace nested automatic-height section groups with a measured layout height to reduce costly Roblox UI relayout cycles.
+- Create Matrix-rain text columns only when the optional animation is enabled; this saves initial objects and RichText work when rain is off.
+- Preserve the v0.4.3 visual redesign, constructors, flag persistence and public methods. No new loader URL is required.
+- Add staged initialization messages to HumuHub's existing `loader.lua` for isolating the point of a startup failure.
+- The precise cause of the reported client crash is **not yet confirmed**. This build needs an in-game retest.
+
 ## v0.4.3 visual system
 
 - Redesigned the workspace around a neutral matte frame, spacious header and more readable 600×420 default layout.
