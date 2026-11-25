@@ -2,12 +2,23 @@
 -- Place src/reefFish.luau as a ModuleScript named ReefFish in ReplicatedStorage.
 -- Run this from StarterPlayerScripts as a LocalScript.
 local ReefFish = require(game:GetService("ReplicatedStorage"):WaitForChild("ReefFish"))
-local window = ReefFish:CreateWindow({Title="reefFish UI demo",Theme="MatrixInverse"})
-local main=window:CreateTab({Name="MAIN"})
-main:CreateSection("DEMO")
-main:CreateLabel({Text="reefFish v0.4.2 stability test"})
-main:CreateButton({Name="Ping",Callback=function()window:Notify("Pong!","OK")end})
-main:CreateToggle({Name="Show markers",Flag="markers",Default=false,Callback=function(v)print("Markers:",v)end})
+local window = ReefFish:CreateWindow({Title="reefFish Playground",Theme="MatrixInverse"})
+local main=window:CreateTab({Name="Overview"})
+main:CreateSection("Quick actions")
+main:CreateLabel({Text="reefFish v0.4.3  •  Visual system preview"})
+main:CreateButton({
+ Name="Run quick check",Variant="Primary",Description="Verify notifications and actions",
+ Callback=function()window:Notify("Interface is responding","OK")end
+})
+main:CreateButton({Name="Show information",Variant="Secondary",
+ Description="Preview a standard action row",
+ Callback=function()window:Notify("Grouped actions look cleaner","INFO")end
+})
+main:CreateSection("Preferences")
+main:CreateToggle({
+ Name="Show markers",Description="Example feature toggle",
+ Flag="markers",Default=false,Callback=function(v)print("Markers:",v)end
+})
 main:CreateSlider({Name="Test delay",Flag="delay",Min=0,Max=2,Increment=.05,Default=.4,Callback=function(v)print("Delay:",v)end})
 main:CreateDropdown({Name="Mode",Flag="mode",Options={"Off","Visual","Detailed"},Default="Visual",Callback=function(v)print("Mode:",v)end})
 local colour=main:CreateColorPicker({
@@ -15,6 +26,7 @@ local colour=main:CreateColorPicker({
  Callback=function(value)print("Accent:",value)end
 })
 assert(colour:GetExpanded()==false,"Colour picker should start compact")
+main:CreateSection("Layout & stress tests")
 local wide=false
 main:CreateButton({Name="Toggle window size",Callback=function()
  wide=not wide
