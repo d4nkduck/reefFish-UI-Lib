@@ -595,7 +595,7 @@ function Tab:CreateButton(o)
   w:_theme(f,"BackgroundColor3",variant=="primary" and "accent" or "danger")
  end
  local b=make("TextButton",{
-  Size=UDim2.new(1,-27,1,0),BackgroundTransparency=1,AutoButtonColor=false,
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
   Text="   "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
   TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
   TextTruncate=Enum.TextTruncate.AtEnd
@@ -790,7 +790,7 @@ function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
  local w=self.window
- local f=self:_base(66)
+ local f=self:_base(Design.height.dropdown)
 
  local opts=o.Options or {}
  local multi=o.Multi==true
@@ -805,20 +805,26 @@ function Tab:CreateDropdown(o)
  else
   value=table.find(opts,o.Default) and o.Default or opts[1]
  end
- local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
- w:_theme(lab,"TextColor3","text")
+ local lab=make("TextLabel",{
+  Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(11,2),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ w:_theme(lab,"TextColor3","muted")
  local b=make("TextButton",{
-  Size=UDim2.new(1,-20,0,30),Position=UDim2.fromOffset(10,29),
-  Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  Size=UDim2.new(1,-22,0,32),Position=UDim2.fromOffset(11,29),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
   TextTruncate=Enum.TextTruncate.AtEnd,
   BorderSizePixel=0,AutoButtonColor=false
  },f)
- round(b,5)
+ round(b,Design.radius.control)
  w:_theme(b,"TextColor3","text")
  w:_theme(b,"BackgroundColor3","raised")
+ local fieldStroke=make("UIStroke",{Thickness=1,Transparency=.55},b)
+ w:_theme(fieldStroke,"Color","stroke")
  local chevron=make("TextLabel",{
   Text="⌄",BackgroundTransparency=1,Size=UDim2.fromOffset(18,28),
-  Position=UDim2.new(1,-34,0,30),Font=Enum.Font.GothamBold,TextSize=15
+  Position=UDim2.new(1,-37,0,32),Font=Enum.Font.GothamBold,TextSize=15
  },f)
  w:_theme(chevron,"TextColor3","muted")
  local handle={}
@@ -1030,30 +1036,31 @@ end
 function Tab:CreateInput(o)
  o=o or {}
  local w=self.window
- local f=self:_base(63)
+ local f=self:_base(Design.height.input)
  local name=make("TextLabel",{
   Text=tostring(o.Name or "Input"),BackgroundTransparency=1,
-  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(10,0),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(11,2),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Left
  },f)
- w:_theme(name,"TextColor3","text")
+ w:_theme(name,"TextColor3","muted")
  local box=make("TextBox",{
   Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),
-  ClearTextOnFocus=false,Size=UDim2.new(1,-20,0,29),
-  Position=UDim2.fromOffset(10,28),Font=Enum.Font.Gotham,TextSize=12,
+  ClearTextOnFocus=false,Size=UDim2.new(1,-22,0,32),
+  Position=UDim2.fromOffset(11,29),Font=Enum.Font.Gotham,TextSize=Design.type.body,
   TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0
  },f)
- round(box,5)
+ round(box,Design.radius.control)
+ make("UIPadding",{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)},box)
  w:_theme(box,"TextColor3","text")
  w:_theme(box,"BackgroundColor3","raised")
  w:_theme(box,"PlaceholderColor3","muted")
- local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.5},box)
+ local outline=make("UIStroke",{Thickness=1,Color=w.colors.stroke,Transparency=.42},box)
  local disabled=false
  local lastCommitted=box.Text
  local function refreshOutline()
   if not box.Parent then return end
-  outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
-  outline.Transparency=box:IsFocused() and 0 or .5
+  outline.Color=box:IsFocused() and w.colors.accent or w.colors.stroke
+  outline.Transparency=box:IsFocused() and 0 or .42
  end
  w:_trackFeedback(f,refreshOutline)
  w:_connectControl(f,box.Focused,refreshOutline)
@@ -1088,7 +1095,7 @@ function Tab:CreateInput(o)
   if disabled then return end
   if o.Numeric and tonumber(box.Text)==nil then
    box.Text=lastCommitted
-   outline.Color=Color3.fromRGB(240,120,120)
+   outline.Color=w.colors.danger
    outline.Transparency=0
    w:Notify("Enter a valid number for "..tostring(o.Name or "Input"),"WARN")
    return
@@ -1108,18 +1115,18 @@ function Tab:CreateParagraph(o)
  local heading=make("TextLabel",{
   Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.GothamBold,TextSize=12,Text=tostring(o.Title or "INFORMATION")
+  Font=Enum.Font.GothamBold,TextSize=Design.type.body,Text=tostring(o.Title or "INFORMATION")
  },f)
- w:_theme(heading,"TextColor3","accent")
+ w:_theme(heading,"TextColor3","text")
  local content=make("TextLabel",{
   Position=UDim2.fromOffset(10,30),
   Size=autoHeight and UDim2.new(1,-20,0,0) or UDim2.new(1,-20,1,-36),
   AutomaticSize=autoHeight and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
   TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
-  Font=Enum.Font.Gotham,TextSize=12,Text=tostring(o.Content or "")
+  Font=Enum.Font.Gotham,TextSize=Design.type.label,Text=tostring(o.Content or "")
  },f)
- w:_theme(content,"TextColor3","text")
+ w:_theme(content,"TextColor3","muted")
  local function updateHeight()
   if autoHeight and f.Parent then
    f.Size=UDim2.new(1,-4,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
