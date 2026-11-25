@@ -1350,13 +1350,13 @@ function Lib:CreateWindow(o)
  assert(player,"reefFish must run in a client LocalScript")
  local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
  local w=setmetatable({
-  width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
+  width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 380),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
+  rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
-  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16)
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
  if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
@@ -1380,22 +1380,69 @@ function Lib:CreateWindow(o)
  w.screen=make("ScreenGui",{Name="reefFishUI",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},parent)
  w.root=make("Frame",{Size=UDim2.fromOffset(w.width,w.height),Position=UDim2.new(.5,-w.width/2,.5,-w.height/2),BorderSizePixel=0,ClipsDescendants=true},w.screen)
  w:_theme(w.root,"BackgroundColor3","border")
+ round(w.root,9)
  local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
+ round(inner,6)
  w.inner=inner
  local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
  w:_theme(top,"BackgroundColor3","panel")
- local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  ["..Lib.Version.."]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
- w:_theme(caption,"TextColor3","accent")
- local min=make("TextButton",{Text="_",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-72,0,6),BorderSizePixel=0,ZIndex=7},top)
- local close=make("TextButton",{Text="X",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-37,0,6),BorderSizePixel=0,ZIndex=7},top)
- for _,b in ipairs({min,close}) do w:_theme(b,"BackgroundColor3","raised") w:_theme(b,"TextColor3","accent") end
+ local caption=make("TextLabel",{
+  Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(12,2),
+  Size=UDim2.new(1,-110,0,23),BackgroundTransparency=1,
+  TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.GothamBold,TextSize=15,ZIndex=7
+ },top)
+ w:_theme(caption,"TextColor3","text")
+ local subtitle=make("TextLabel",{
+  Text="reefFish  /  "..Lib.Version,Position=UDim2.fromOffset(12,24),
+  Size=UDim2.new(1,-110,0,13),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.Gotham,TextSize=10,ZIndex=7
+ },top)
+ w:_theme(subtitle,"TextColor3","muted")
+ local min=make("TextButton",{
+  Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-69,0,7),
+  BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
+ },top)
+ local close=make("TextButton",{
+  Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-36,0,7),
+  BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
+ },top)
+ for _,b in ipairs({min,close}) do
+  round(b,5)
+  w:_theme(b,"BackgroundColor3","raised")
+  w:_theme(b,"TextColor3","text")
+  w:_feedback(b,b)
+ end
  w.body=make("Frame",{Position=UDim2.fromOffset(0,42),Size=UDim2.new(1,0,1,-66),BackgroundTransparency=1,ZIndex=6},inner)
- w.nav=make("ScrollingFrame",{Size=UDim2.new(.3,0,1,0),ScrollBarThickness=0,BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6},w.body)
- make("UIListLayout",{Padding=UDim.new(0,4)},w.nav)
- w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
- w._status=make("TextLabel",{Text="> reefFish "..Lib.Version.." | PROFILES | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
+ w.nav=make("ScrollingFrame",{
+  Size=UDim2.new(.26,0,1,0),ScrollBarThickness=0,
+  BackgroundTransparency=0,CanvasSize=UDim2.new(),
+  AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6
+ },w.body)
+ w:_theme(w.nav,"BackgroundColor3","bg")
+ make("UIPadding",{
+  PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,6),
+  PaddingRight=UDim.new(0,2),PaddingBottom=UDim.new(0,8)
+ },w.nav)
+ make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
+ local navDivider=make("Frame",{
+  Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
+  BorderSizePixel=0,ZIndex=7,Active=false
+ },w.body)
+ w:_theme(navDivider,"BackgroundColor3","raised")
+ w.content=make("Frame",{
+  Size=UDim2.new(.74,-3,1,0),Position=UDim2.new(.26,3,0,0),
+  BackgroundTransparency=1,ZIndex=6
+ },w.body)
+ w._status=make("TextLabel",{
+  Text="reefFish  •  Ready",Position=UDim2.new(0,11,1,-24),
+  Size=UDim2.new(1,-22,0,22),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,
+  TextSize=11,ZIndex=6
+ },inner)
  w:_theme(w._status,"TextColor3","muted")
  w._toastLayer=make("Frame",{
   Position=UDim2.new(1,-299,1,-250),Size=UDim2.fromOffset(280,225),
@@ -1607,7 +1654,7 @@ function Lib:CreateWindow(o)
    Callback=function(value)w:SetRain(w.rainEnabled,w.rainDensity,value/100)end
   })
   local border=appearance:CreateSlider({
-   Name="Border thickness",Min=9,Max=16,Increment=1,Default=w.borderThickness,
+   Name="Border thickness",Min=3,Max=16,Increment=1,Default=w.borderThickness,
    Callback=function(value)w:SetBorderThickness(value)end
   })
   local function syncAppearance()
