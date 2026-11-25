@@ -539,10 +539,18 @@ end
 function Tab:_base(height)
  local w=self.window
  local grouped=self._group~=nil and self._group.Parent~=nil
+ local order
+ if grouped then
+  self._groupOrder=(self._groupOrder or 0)+1
+  order=self._groupOrder
+ else
+  self._layoutOrder=(self._layoutOrder or 0)+1
+  order=self._layoutOrder
+ end
  local frame=make("Frame",{
   Size=UDim2.new(1,grouped and 0 or -4,0,height),
   BackgroundTransparency=grouped and 1 or 0,
-  BorderSizePixel=0
+  BorderSizePixel=0,LayoutOrder=order
  },grouped and self._group or self.page)
  if not grouped then
   round(frame,Design.radius.surface)
@@ -561,8 +569,10 @@ function Tab:_base(height)
 end
 function Tab:CreateSection(name)
  local w=self.window
+ self._layoutOrder=(self._layoutOrder or 0)+1
  local f=make("Frame",{
-  Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1,BorderSizePixel=0
+  Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1,
+  BorderSizePixel=0,LayoutOrder=self._layoutOrder
  },self.page)
  local label=make("TextLabel",{
   BackgroundTransparency=1,Size=UDim2.new(1,-18,1,0),
@@ -571,9 +581,10 @@ function Tab:CreateSection(name)
   TextXAlignment=Enum.TextXAlignment.Left
  },f)
  w:_theme(label,"TextColor3","muted")
+ self._layoutOrder+=1
  local group=make("Frame",{
   Size=UDim2.new(1,-4,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-  BackgroundTransparency=0,BorderSizePixel=0
+  BackgroundTransparency=0,BorderSizePixel=0,LayoutOrder=self._layoutOrder
  },self.page)
  round(group,Design.radius.surface)
  w:_theme(group,"BackgroundColor3","panel")
@@ -585,6 +596,7 @@ function Tab:CreateSection(name)
  },group)
  make("UIListLayout",{Padding=UDim.new(0,0),SortOrder=Enum.SortOrder.LayoutOrder},group)
  self._group=group
+ self._groupOrder=0
  return f
 end
 function Tab:CreateLabel(o)
@@ -2050,6 +2062,7 @@ function Lib:CreateWindow(o)
  },w.root)
  w._rainLayer=rainLayer
   rainLayer.Visible=w.rainEnabled
+  w:_refreshChrome()
  local function hex(c)
   return string.format("#%02X%02X%02X",
    math.floor(c.R*255+.5),
