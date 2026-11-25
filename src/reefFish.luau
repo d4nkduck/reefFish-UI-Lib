@@ -2235,6 +2235,12 @@ function Lib:CreateWindow(o)
  w:_theme(subtitle,"TextColor3","muted")
  w._title=caption
  w._subtitle=subtitle
+ local searchBtn=make("TextButton",{
+  Name="SearchSettings",Text="⌕",Size=UDim2.fromOffset(30,28),
+  Position=UDim2.new(1,-111,0,11),BorderSizePixel=0,
+  Font=Enum.Font.GothamBold,TextSize=19,ZIndex=7,AutoButtonColor=false
+ },top)
+ w._searchBtn=searchBtn
  local min=make("TextButton",{
   Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-76,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
@@ -2243,7 +2249,7 @@ function Lib:CreateWindow(o)
   Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-41,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
  },top)
- for _,b in ipairs({min,close}) do
+ for _,b in ipairs({searchBtn,min,close}) do
   round(b,Design.radius.control)
   w:_theme(b,"BackgroundColor3","raised")
   w:_theme(b,"TextColor3","text")
@@ -2298,6 +2304,10 @@ function Lib:CreateWindow(o)
  -- One window-level key dispatcher.
  w._connections[#w._connections+1]=UIS.InputBegan:Connect(function(i,processed)
   if i.UserInputType~=Enum.UserInputType.Keyboard then return end
+  if i.KeyCode==Enum.KeyCode.Escape then
+   if w._dialog then w._dialog:Cancel() return end
+   if w._searchOverlay then w:CloseSearch() return end
+  end
   if w._bindingCapture then
    if processed or UIS:GetFocusedTextBox() then return end
    local captured=w._bindingCapture
@@ -2314,6 +2324,12 @@ function Lib:CreateWindow(o)
    return
   end
   if processed or UIS:GetFocusedTextBox() then return end
+  if i.KeyCode==Enum.KeyCode.K
+    and (UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.RightControl))
+    and not w.hidden then
+   w:ToggleSearch()
+   return
+  end
   if i.KeyCode==w.toggleKey then w:SetHidden(not w.hidden) return end
   if w.hidden then return end
   for _,bind in ipairs(w._keybinds) do
@@ -2325,6 +2341,9 @@ function Lib:CreateWindow(o)
   for _,bind in ipairs(w._keybinds) do
    if bind:Get()==i.KeyCode.Name then bind:_input(false) end
   end
+ end)
+ w._connections[#w._connections+1]=searchBtn.MouseButton1Click:Connect(function()
+  w:ToggleSearch()
  end)
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
@@ -2341,7 +2360,9 @@ function Lib:CreateWindow(o)
   local pos=i.Position
   local minX=min.AbsolutePosition.X
   local closeX=close.AbsolutePosition.X
-  if (pos.X>=minX and pos.X<=minX+min.AbsoluteSize.X)
+  local searchX=searchBtn.AbsolutePosition.X
+  if (pos.X>=searchX and pos.X<=searchX+searchBtn.AbsoluteSize.X)
+   or (pos.X>=minX and pos.X<=minX+min.AbsoluteSize.X)
    or (pos.X>=closeX and pos.X<=closeX+close.AbsoluteSize.X) then return end
   dragging=true
   dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
