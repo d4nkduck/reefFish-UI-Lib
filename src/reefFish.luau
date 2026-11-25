@@ -765,83 +765,91 @@ function Tab:CreateDropdown(o)
   local list=make("ScrollingFrame",{
    Position=UDim2.fromOffset(6,41),Size=UDim2.new(1,-12,1,-47),
    BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
-   ScrollBarImageColor3=w.colors.border,AutomaticCanvasSize=Enum.AutomaticSize.Y,
+   ScrollBarImageColor3=w.colors.muted,AutomaticCanvasSize=Enum.AutomaticSize.None,
    CanvasSize=UDim2.new(),ZIndex=103
   },panel)
-  make("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,2)},list)
-  local optionButtons={}
-  local MAX_DISPLAY=50
-  local function updateList(preserveScroll)
-   local oldPosition=preserveScroll and list.CanvasPosition or Vector2.zero
-   for _,item in ipairs(optionButtons) do item:Destroy() end
-   table.clear(optionButtons)
-   local query=string.lower(search.Text)
-   local shown,total=0,0
-   for _,option in ipairs(opts) do
-    local label=tostring(option)
-    if query=="" or string.find(string.lower(label),query,1,true) then
-     total+=1
-     if shown<MAX_DISPLAY then
-      shown+=1
-      local chosen=option
-      local selected=(multi and table.find(value,chosen)~=nil or chosen==value)
-      local item=make("TextButton",{
-       Text=(selected and "✓  " or "   ")..label,
-       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
-       TextColor3=selected and w.colors.accent or w.colors.text,
-       BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
-       TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
-      },list)
-      round(item,4)
-      optionButtons[#optionButtons+1]=item
-      item.MouseEnter:Connect(function()
-       if item.Parent then item.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
-      end)
-      item.MouseLeave:Connect(function()
-       if item.Parent then item.BackgroundColor3=w.colors.raised end
-      end)
-      item.MouseButton1Click:Connect(function()
-       if multi then
-        local nextValue=table.clone(value)
-        local index=table.find(nextValue,chosen)
-        if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
-        handle:Set(nextValue,true)
-        updateList(true)
-       else
-        handle:Set(chosen,true)
-        if w._closeDropdown then w._closeDropdown() end
-       end
-      end)
-     end
+
+  -- Virtual scrolling: all options remain reachable without instantiating
+  -- one Roblox TextButton per option.
+  local ROW_HEIGHT=30
+  local visibleCount=math.max(3,math.ceil((panelHeight-47)/ROW_HEIGHT)+2)
+  local filtered={}
+  local rowButtons={}
+  local rowIndexes={}
+  local empty=make("TextLabel",{
+   Text="No matching options",
+   Size=UDim2.new(1,-8,0,30),Position=UDim2.fromOffset(4,0),
+   BackgroundTransparency=1,Font=Enum.Font.Gotham,
+   TextSize=12,TextColor3=w.colors.muted,ZIndex=105,Visible=false
+  },list)
+  local function refreshVisible()
+   if not overlay or not overlay.Parent then return end
+   local first=math.max(1,math.floor(list.CanvasPosition.Y/ROW_HEIGHT)+1)
+   for slot,row in ipairs(rowButtons) do
+    local index=first+slot-1
+    local choice=filtered[index]
+    rowIndexes[slot]=index
+    if choice~=nil then
+     local chosen=multi and table.find(value,choice)~=nil or choice==value
+     row.Text=(chosen and "✓  " or "   ")..tostring(choice)
+     row.TextColor3=chosen and w.colors.accent or w.colors.text
+     row.BackgroundColor3=w.colors.raised
+     row.Position=UDim2.fromOffset(2,(index-1)*ROW_HEIGHT)
+     row.Visible=true
+    else
+     row.Visible=false
     end
    end
-   if total==0 then
-    local empty=make("TextLabel",{
-     Text="No results",Size=UDim2.new(1,-4,0,28),
-     BackgroundTransparency=1,TextColor3=w.colors.muted,
-     Font=Enum.Font.Gotham,TextSize=12,ZIndex=105
-    },list)
-    optionButtons[#optionButtons+1]=empty
-   elseif total>shown then
-    local hint=make("TextLabel",{
-     Text="Showing "..shown.." of "..total.." — search to narrow",
-     Size=UDim2.new(1,-4,0,28),BackgroundTransparency=1,
-     TextColor3=w.colors.muted,Font=Enum.Font.Gotham,
-     TextSize=11,ZIndex=105
-    },list)
-    optionButtons[#optionButtons+1]=hint
-   end
-   list.CanvasPosition=oldPosition
+   empty.Visible=#filtered==0
   end
-  search.FocusLost:Connect(function(enterPressed)
-   if not enterPressed or multi or not overlay or not overlay.Parent then return end
+  for slot=1,visibleCount do
+   local row=make("TextButton",{
+    Text="",Size=UDim2.new(1,-8,0,28),
+    BackgroundColor3=w.colors.raised,BorderSizePixel=0,
+    Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+    AutoButtonColor=false,TextTruncate=Enum.TextTruncate.AtEnd,
+    ZIndex=105,Visible=false
+   },list)
+   round(row,4)
+   rowButtons[slot]=row
+   row.MouseEnter:Connect(function()
+    if row.Parent then row.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
+   end)
+   row.MouseLeave:Connect(function()
+    if row.Parent then row.BackgroundColor3=w.colors.raised end
+   end)
+   row.MouseButton1Click:Connect(function()
+    local choice=filtered[rowIndexes[slot]]
+    if choice==nil then return end
+    if multi then
+     local nextValue=table.clone(value)
+     local index=table.find(nextValue,choice)
+     if index then table.remove(nextValue,index) else table.insert(nextValue,choice) end
+     handle:Set(nextValue,true)
+     refreshVisible()
+    else
+     handle:Set(choice,true)
+     if w._closeDropdown then w._closeDropdown() end
+    end
+   end)
+  end
+  local function updateList()
+   table.clear(filtered)
    local query=string.lower(search.Text)
    for _,option in ipairs(opts) do
     if query=="" or string.find(string.lower(tostring(option)),query,1,true) then
-     handle:Set(option,true)
-     if w._closeDropdown then w._closeDropdown() end
-     break
+     filtered[#filtered+1]=option
     end
+   end
+   list.CanvasSize=UDim2.new(0,0,0,#filtered*ROW_HEIGHT)
+   list.CanvasPosition=Vector2.zero
+   refreshVisible()
+  end
+  list:GetPropertyChangedSignal("CanvasPosition"):Connect(refreshVisible)
+  search.FocusLost:Connect(function(enterPressed)
+   if enterPressed and not multi and filtered[1]~=nil and overlay and overlay.Parent then
+    handle:Set(filtered[1],true)
+    if w._closeDropdown then w._closeDropdown() end
    end
   end)
   local positionConn=b:GetPropertyChangedSignal("AbsolutePosition"):Connect(positionPanel)
