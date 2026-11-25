@@ -1,11 +1,14 @@
--- reefFish UI Lib v0.4.4-alpha
+-- reefFish UI Lib v0.5.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.4-alpha"}
+local Lib={Version="0.5.0-alpha"}
+-- Public artwork source. Roblox UI requires a Roblox image asset ID at runtime.
+Lib.IconSource="https://raw.githubusercontent.com/d4nkduck/reefFish-UI-Lib/main/assets/reefFish-icon.png"
+Lib.DefaultIconAsset=nil
 -- Foundation tokens: neutral surfaces and a separate optional accent/rain layer.
 local Design={
  space={xs=4,sm=8,md=12,lg=16,xl=20},
@@ -75,6 +78,16 @@ local function parseColor(value)
    return Color3.fromRGB(tonumber(h:sub(1,2),16),tonumber(h:sub(3,4),16),tonumber(h:sub(5,6),16))
   end
  end
+ return nil
+end
+local function imageAsset(value)
+ local id=value
+ if type(id)=="number" and id>0 then id=tostring(math.floor(id)) end
+ if type(id)=="string" and id:match("^%d+$") then id="rbxassetid://"..id end
+ if type(id)=="string" and (
+  id:match("^rbxassetid://%d+$")
+  or id:match("^rbxasset://[%w_/%-%.]+$")
+ ) then return id end
  return nil
 end
 local function packValue(v)
@@ -277,6 +290,90 @@ function Window:SetRain(enabled,density,speed)
  self:_markChanged("appearance")
 end
 -- Small capped toast queue with a timed dismissal.
+-- Lightweight, non-blocking confirmation modal. No continuous render loops.
+function Window:Confirm(options)
+ options=options or {}
+ if self.destroyed or not self.screen then return nil end
+ if self._dialog then self._dialog:Dismiss(true) end
+ if self._searchOverlay then self:CloseSearch() end
+ local viewport=self:_viewport()
+ local panelWidth=math.min(420,math.max(230,viewport.X-28))
+ local panelHeight=math.min(238,math.max(170,viewport.Y-28))
+ local overlay=make("Frame",{
+  Name="ReefFishConfirm",Size=UDim2.fromScale(1,1),
+  BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=.45,
+  BorderSizePixel=0,ZIndex=225
+ },self.screen)
+ local panel=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+  Size=UDim2.fromOffset(panelWidth,panelHeight),
+  BorderSizePixel=0,ZIndex=226
+ },overlay)
+ round(panel,Design.radius.surface)
+ self:_theme(panel,"BackgroundColor3","panel")
+ local edge=make("UIStroke",{Thickness=1,Transparency=.3},panel)
+ self:_theme(edge,"Color","stroke")
+ local title=make("TextLabel",{
+  Text=tostring(options.Title or "Are you sure?"),Position=UDim2.fromOffset(18,13),
+  Size=UDim2.new(1,-36,0,30),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,
+  Font=Enum.Font.GothamBold,TextSize=16,ZIndex=227
+ },panel)
+ self:_theme(title,"TextColor3","text")
+ local body=make("TextLabel",{
+  Text=tostring(options.Content or options.Message or ""),
+  Position=UDim2.fromOffset(18,48),Size=UDim2.new(1,-36,1,-105),
+  TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,
+  TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
+  Font=Enum.Font.Gotham,TextSize=Design.type.body,ZIndex=227
+ },panel)
+ self:_theme(body,"TextColor3","muted")
+ local cancel=make("TextButton",{
+  Text=tostring(options.CancelText or "Cancel"),
+  Position=UDim2.new(.5,-126,1,-48),Size=UDim2.fromOffset(118,34),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  BorderSizePixel=0,AutoButtonColor=false,ZIndex=227
+ },panel)
+ round(cancel,Design.radius.control)
+ self:_theme(cancel,"TextColor3","text")
+ self:_theme(cancel,"BackgroundColor3","raised")
+ local confirm=make("TextButton",{
+  Text=tostring(options.ConfirmText or "Confirm"),
+  Position=UDim2.new(.5,8,1,-48),Size=UDim2.fromOffset(118,34),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  BorderSizePixel=0,AutoButtonColor=false,ZIndex=227
+ },panel)
+ round(confirm,Design.radius.control)
+ self:_theme(confirm,"BackgroundColor3",options.Danger==true and "danger" or "accent")
+ self:_theme(confirm,"TextColor3","bg")
+ local handle={}
+ local selfWindow=self
+ local closed=false
+ function handle:Dismiss(silent)
+  if closed then return end
+  closed=true
+  if self==handle and overlay.Parent then overlay:Destroy() end
+  if self==handle and selfWindow._dialog==handle then selfWindow._dialog=nil end
+  if not silent then
+   fire(options.OnCancel)
+   if not options.OnConfirm then fire(options.Callback,false) end
+  end
+ end
+ function handle:Cancel()self:Dismiss(false)end
+ function handle:Confirm()
+  if closed then return end
+  self:Dismiss(true)
+  fire(options.OnConfirm or options.Callback,true)
+ end
+ self._dialog=handle
+ cancel.MouseButton1Click:Connect(function()handle:Cancel()end)
+ confirm.MouseButton1Click:Connect(function()handle:Confirm()end)
+ return handle
+end
+function Window:Dialog(options)
+ return self:Confirm(options)
+end
+
 function Window:Toast(info)
  info=type(info)=="table" and info or {Content=tostring(info)}
  if self.destroyed or not self._toastLayer then return nil end
@@ -468,6 +565,8 @@ function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
+ if self._dialog then self._dialog:Dismiss(true) end
+ if self._searchOverlay then self:CloseSearch() end
  self._bindingCapture=nil
  if self._viewportConnection then
   self._viewportConnection:Disconnect()
@@ -494,21 +593,194 @@ function Window:Destroy()
  table.clear(self._boundOwners)
  table.clear(self._feedbackRefresh)
  table.clear(self._keybinds)
+ table.clear(self._searchItems)
  table.clear(self._connections)
  if self._registry and self._registry.__reefFishWindow==self then
   self._registry.__reefFishWindow=nil
  end
 end
+function Window:_indexControl(tab,frame,title)
+ local label=tostring(title or "")
+ if #label>100 then label=label:sub(1,100) end
+ if label=="" then return end
+ self._searchItems[#self._searchItems+1]={
+  tab=tab,frame=frame,title=label,
+  key=string.lower(tostring(tab.name or "").." "..label)
+ }
+end
+function Window:GetDiagnostics()
+ local counts={windowEvents=#self._connections,controlEvents=0,tabs=#self.tabs,controls=0,flags=0}
+ for _,bucket in pairs(self._controlConnections or {}) do
+  counts.controlEvents+=#bucket
+ end
+ for _,entry in ipairs(self._searchItems or {}) do
+  if entry.frame.Parent then counts.controls+=1 end
+ end
+ for _ in pairs(self.flags or {}) do counts.flags+=1 end
+ return {
+  version=Lib.Version,theme=self.themeName,hidden=self.hidden,
+  minimized=self.minimized,destroyed=self.destroyed,
+  rain=self.rainEnabled,storage=self.StorageMode,
+  size=Vector2.new(self.width,self.height),counts=counts
+ }
+end
+function Window:FindControls(query,limit)
+ local needle=string.lower(tostring(query or ""))
+ local results={}
+ limit=math.clamp(math.floor(tonumber(limit) or 20),1,100)
+ for i=#self._searchItems,1,-1 do
+  local entry=self._searchItems[i]
+  if not entry.frame.Parent then table.remove(self._searchItems,i) end
+ end
+ for _,entry in ipairs(self._searchItems) do
+  if needle=="" or string.find(entry.key,needle,1,true) then
+   results[#results+1]=entry
+   if #results>=limit then break end
+  end
+ end
+ return results
+end
+function Window:CloseSearch()
+ if self._searchOverlay then
+  self._searchOverlay:Destroy()
+  self._searchOverlay=nil
+ end
+end
+function Window:_jumpToSearchResult(entry)
+ if self.destroyed or not entry or not entry.frame.Parent then return false end
+ local tab=entry.tab
+ local parent=entry.frame.Parent
+ local expand=tab._collapsibleGroups and tab._collapsibleGroups[parent]
+ if expand then expand(true) end
+ self:SelectTab(tab)
+ self:CloseSearch()
+ task.defer(function()
+  if self.destroyed or not entry.frame.Parent or not tab.page.Parent then return end
+  local y=entry.frame.AbsolutePosition.Y-tab.page.AbsolutePosition.Y
+    +tab.page.CanvasPosition.Y-14
+  tab.page.CanvasPosition=Vector2.new(0,math.max(0,y))
+ end)
+ return true
+end
+function Window:OpenSearch(initial)
+ if self.destroyed or not self.screen then return nil end
+ if self._dialog then self._dialog:Dismiss(true) end
+ self:CloseSearch()
+ if self._closeDropdown then self._closeDropdown() end
+ local viewport=self:_viewport()
+ local width=math.min(440,math.max(220,viewport.X-24))
+ local height=math.min(392,math.max(180,viewport.Y-24))
+ local overlay=make("Frame",{
+  Name="ReefFishSearch",Size=UDim2.fromScale(1,1),
+  BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=.42,
+  BorderSizePixel=0,ZIndex=200
+ },self.screen)
+ self._searchOverlay=overlay
+ local dismiss=make("TextButton",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+  Text="",BorderSizePixel=0,ZIndex=201,AutoButtonColor=false
+ },overlay)
+ local panel=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+  Size=UDim2.fromOffset(width,height),BorderSizePixel=0,ZIndex=202
+ },overlay)
+ round(panel,Design.radius.surface)
+ self:_theme(panel,"BackgroundColor3","panel")
+ local outline=make("UIStroke",{Thickness=1,Transparency=.3},panel)
+ self:_theme(outline,"Color","stroke")
+ local heading=make("TextLabel",{
+  Text="Find a setting",Position=UDim2.fromOffset(16,12),
+  Size=UDim2.new(1,-32,0,25),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,
+  TextSize=15,ZIndex=203
+ },panel)
+ self:_theme(heading,"TextColor3","text")
+ local field=make("TextBox",{
+  Position=UDim2.fromOffset(14,45),Size=UDim2.new(1,-28,0,36),
+  BackgroundColor3=self.colors.raised,TextColor3=self.colors.text,
+  PlaceholderColor3=self.colors.muted,PlaceholderText="Search tabs and settings...",
+  Text=tostring(initial or ""),ClearTextOnFocus=false,
+  Font=Enum.Font.Gotham,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0,ZIndex=203
+ },panel)
+ round(field,Design.radius.control)
+ make("UIPadding",{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)},field)
+ local resultList=make("ScrollingFrame",{
+  Position=UDim2.fromOffset(14,91),Size=UDim2.new(1,-28,1,-105),
+  BackgroundTransparency=1,BorderSizePixel=0,
+  AutomaticCanvasSize=Enum.AutomaticSize.Y,
+  CanvasSize=UDim2.new(),ScrollBarThickness=3,ZIndex=203
+ },panel)
+ make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},resultList)
+ local shown={}
+ local function refresh()
+  if not overlay.Parent then return end
+  for _,child in ipairs(resultList:GetChildren()) do
+   if child:IsA("TextButton") or child:IsA("TextLabel") then child:Destroy() end
+  end
+  table.clear(shown)
+  local hits=self:FindControls(field.Text,12)
+  for i,entry in ipairs(hits) do
+   shown[i]=entry
+   local row=make("TextButton",{
+    Text="  "..entry.title.."  ·  "..tostring(entry.tab.name or "Tab"),
+    Size=UDim2.new(1,-3,0,35),BackgroundColor3=self.colors.raised,
+    TextColor3=self.colors.text,BorderSizePixel=0,
+    Font=Enum.Font.Gotham,TextSize=Design.type.body,
+    TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,
+    AutoButtonColor=false,ZIndex=204,LayoutOrder=i
+   },resultList)
+   round(row,Design.radius.small)
+   local choice=entry
+   row.MouseButton1Click:Connect(function()self:_jumpToSearchResult(choice)end)
+  end
+  if #hits==0 then
+   local none=make("TextLabel",{
+    Text="No matching settings",
+    Size=UDim2.new(1,0,0,38),BackgroundTransparency=1,
+    TextColor3=self.colors.muted,Font=Enum.Font.Gotham,
+    TextSize=Design.type.body,ZIndex=204
+   },resultList)
+  end
+  resultList.CanvasPosition=Vector2.zero
+ end
+ local selfWindow=self
+ local handle={}
+ function handle:Dismiss()selfWindow:CloseSearch()end
+ dismiss.MouseButton1Click:Connect(function()self:CloseSearch()end)
+ field:GetPropertyChangedSignal("Text"):Connect(refresh)
+ field.FocusLost:Connect(function(enterPressed)
+  if enterPressed and shown[1] then self:_jumpToSearchResult(shown[1]) end
+ end)
+ refresh()
+ task.defer(function()
+  if overlay.Parent then field:CaptureFocus() end
+ end)
+ return handle
+end
+function Window:ToggleSearch()
+ if self._searchOverlay then self:CloseSearch() else self:OpenSearch() end
+end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
+ local iconId=imageAsset(type(opts)=="table" and opts.Icon or nil)
  local button=make("TextButton",{
-  Text="  "..tostring(name),LayoutOrder=#self.tabs+1,
+  Text=(iconId and "       " or "  ")..tostring(name),LayoutOrder=#self.tabs+1,
   Size=self._compactNav and UDim2.fromOffset(124,36) or UDim2.new(1,-10,0,36),
   Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
  },self.nav)
  round(button,Design.radius.control)
+ local iconLabel
+ if iconId then
+  iconLabel=make("ImageLabel",{
+   Name="TabIcon",BackgroundTransparency=1,Image=iconId,
+   Size=UDim2.fromOffset(19,19),Position=UDim2.fromOffset(10,8),
+   ScaleType=Enum.ScaleType.Fit,BorderSizePixel=0,ZIndex=7
+  },button)
+  pcall(function()iconLabel.ResampleMode=Enum.ResamplerMode.Pixelated end)
+ end
  local indicator=make("Frame",{
   Position=UDim2.fromOffset(0,8),Size=UDim2.fromOffset(3,20),
   BorderSizePixel=0,Visible=false,Active=false
@@ -526,7 +798,26 @@ function Window:CreateTab(opts)
   PaddingLeft=UDim.new(0,Design.space.md),PaddingRight=UDim.new(0,Design.space.md)
  },page)
  make("UIListLayout",{Padding=UDim.new(0,Design.space.sm),SortOrder=Enum.SortOrder.LayoutOrder},page)
- local t=setmetatable({window=self,button=button,page=page,indicator=indicator},Tab)
+ local t=setmetatable({window=self,button=button,page=page,indicator=indicator,name=tostring(name)},Tab)
+ function t:SetIcon(asset)
+  local id=imageAsset(asset)
+  if not id then
+   if iconLabel then iconLabel:Destroy() iconLabel=nil end
+   button.Text="  "..self.name
+   return false
+  end
+  if not iconLabel then
+   iconLabel=make("ImageLabel",{
+    Name="TabIcon",BackgroundTransparency=1,BorderSizePixel=0,
+    Size=UDim2.fromOffset(19,19),Position=UDim2.fromOffset(10,8),
+    ScaleType=Enum.ScaleType.Fit,ZIndex=7
+   },button)
+   pcall(function()iconLabel.ResampleMode=Enum.ResamplerMode.Pixelated end)
+  end
+  iconLabel.Image=id
+  button.Text="       "..self.name
+  return true
+ end
  self:_theme(button,"TextColor3","muted")
  self:_theme(button,"BackgroundColor3","bg")
  self.tabs[#self.tabs+1]=t
@@ -544,7 +835,7 @@ function Window:CreateTab(opts)
  if #self.tabs==1 then self:SelectTab(t) end
  return t
 end
-function Tab:_base(height)
+function Tab:_base(height,searchLabel)
  local w=self.window
  local grouped=self._group~=nil and self._group.Parent~=nil
  local order
@@ -573,28 +864,47 @@ function Tab:_base(height)
   },frame)
   w:_theme(separator,"BackgroundColor3","stroke")
  end
+ if searchLabel~=nil then
+  w:_indexControl(self,frame,tostring(searchLabel))
+ end
  return frame
 end
 function Tab:CreateSection(name)
  local w=self.window
+ local opts=type(name)=="table" and name or nil
+ local title=tostring(opts and (opts.Name or opts.Title) or name or "Section")
+ local collapsible=opts~=nil and opts.Collapsible==true
  self._layoutOrder=(self._layoutOrder or 0)+1
  local f=make("Frame",{
   Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1,
   BorderSizePixel=0,LayoutOrder=self._layoutOrder
  },self.page)
- local label=make("TextLabel",{
+ local label=make(collapsible and "TextButton" or "TextLabel",{
   BackgroundTransparency=1,Size=UDim2.new(1,-18,1,0),
-  Position=UDim2.fromOffset(7,0),Text=tostring(name),
-  Font=Enum.Font.GothamBold,TextSize=Design.type.section,
-  TextXAlignment=Enum.TextXAlignment.Left
+  Position=UDim2.fromOffset(7,0),
+  Text=title,Font=Enum.Font.GothamBold,TextSize=Design.type.section,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  TextTruncate=Enum.TextTruncate.AtEnd,
+  BorderSizePixel=0
  },f)
  w:_theme(label,"TextColor3","muted")
+ local chevron
+ if collapsible then
+  label.Size=UDim2.new(1,-46,1,0)
+  chevron=make("TextLabel",{
+   Position=UDim2.new(1,-28,0,0),Size=UDim2.fromOffset(20,30),
+   BackgroundTransparency=1,Font=Enum.Font.GothamBold,
+   TextSize=14,ZIndex=7
+  },f)
+  w:_theme(chevron,"TextColor3","muted")
+ end
  self._layoutOrder+=1
- -- Explicit height avoids nested AutomaticSize layout feedback with
- -- ScrollingFrame.AutomaticCanvasSize on some Roblox client builds.
+ -- Explicit height avoids nested AutomaticSize cycles.
  local group=make("Frame",{
-  Size=UDim2.new(1,-4,0,8),AutomaticSize=Enum.AutomaticSize.None,
-  BackgroundTransparency=0,BorderSizePixel=0,LayoutOrder=self._layoutOrder
+  Size=UDim2.new(1,-4,0,8),
+  AutomaticSize=Enum.AutomaticSize.None,
+  BackgroundTransparency=0,BorderSizePixel=0,
+  LayoutOrder=self._layoutOrder
  },self.page)
  round(group,Design.radius.surface)
  w:_theme(group,"BackgroundColor3","panel")
@@ -618,11 +928,45 @@ function Tab:CreateSection(name)
  task.defer(updateGroupHeight)
  self._group=group
  self._groupOrder=0
- return f
+ w:_indexControl(self,f,title)
+ if not collapsible then return f end
+ self._collapsibleGroups=self._collapsibleGroups or {}
+ local expanded=opts.Expanded~=false
+ local function setExpanded(v)
+  expanded=v==true
+  if group.Parent then group.Visible=expanded end
+  if chevron.Parent then chevron.Text=expanded and "⌄" or "›" end
+ end
+ self._collapsibleGroups[group]=setExpanded
+ group.Destroying:Connect(function()
+  self._collapsibleGroups[group]=nil
+ end)
+ w:_connectControl(f,label.MouseButton1Click,function()
+  setExpanded(not expanded)
+ end)
+ setExpanded(expanded)
+ local handle={}
+ function handle:SetExpanded(v)setExpanded(v)end
+ function handle:GetExpanded()return expanded end
+ function handle:Toggle()setExpanded(not expanded)end
+ function handle:SetVisible(v)
+  f.Visible=v~=false
+  group.Visible=f.Visible and expanded
+ end
+ function handle:Destroy()
+  if group.Parent then group:Destroy() end
+  if f.Parent then f:Destroy() end
+ end
+ return handle
+end
+function Tab:CreateCollapsibleSection(o)
+ o=type(o)=="table" and table.clone(o) or {Name=tostring(o)}
+ o.Collapsible=true
+ return self:CreateSection(o)
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
- local f=self:_base(32)
+ local f=self:_base(32,o.Text or "Label")
  local l=make("TextLabel",{
   BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),
   Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,
@@ -640,7 +984,7 @@ function Tab:CreateButton(o)
  o=o or {}
  local w=self.window
  local hasDescription=type(o.Description)=="string" and o.Description~=""
- local f=self:_base(hasDescription and 59 or Design.height.button)
+ local f=self:_base(hasDescription and 59 or Design.height.button,o.Name or "Button")
  local variant=string.lower(tostring(o.Variant or o.Style or "secondary"))
  if variant~="primary" and variant~="danger" then variant="secondary" end
  local colored=variant~="secondary"
@@ -696,7 +1040,7 @@ function Tab:CreateToggle(o)
  o=o or {}
  local w=self.window
  local hasDescription=type(o.Description)=="string" and o.Description~=""
- local f=self:_base(hasDescription and 62 or Design.height.toggle)
+ local f=self:_base(hasDescription and 62 or Design.height.toggle,o.Name or "Toggle")
  local value=o.Default==true
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
@@ -776,7 +1120,7 @@ end
 function Tab:CreateSlider(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.slider)
+ local f=self:_base(Design.height.slider,o.Name or "Slider")
  local min,max=tonumber(o.Min) or 0,tonumber(o.Max) or 100
  if max<=min then max=min+1 end
  local inc=math.max(tonumber(o.Increment) or 1,0.000001)
@@ -873,11 +1217,112 @@ function Tab:CreateSlider(o)
  render()
  return handle
 end
+-- Read-only progress component for loading, tasks and diagnostic work.
+function Tab:CreateProgressBar(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(58,o.Name or "Progress")
+ local low=tonumber(o.Min) or 0
+ local high=tonumber(o.Max) or 100
+ if high<=low then high=low+1 end
+ local value=math.clamp(tonumber(o.Default) or low,low,high)
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "Progress"),BackgroundTransparency=1,
+  Position=UDim2.fromOffset(11,4),Size=UDim2.new(1,-112,0,25),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local valueLabel=make("TextLabel",{
+  BackgroundTransparency=1,
+  Position=UDim2.new(1,-94,0,4),Size=UDim2.fromOffset(80,25),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,
+  TextXAlignment=Enum.TextXAlignment.Right
+ },f)
+ w:_theme(valueLabel,"TextColor3","muted")
+ local track=make("Frame",{
+  Position=UDim2.fromOffset(12,38),Size=UDim2.new(1,-24,0,7),
+  BorderSizePixel=0
+ },f)
+ round(track,4)
+ w:_theme(track,"BackgroundColor3","raised")
+ local fill=make("Frame",{
+  Size=UDim2.fromScale(0,1),BorderSizePixel=0
+ },track)
+ round(fill,4)
+ w:_theme(fill,"BackgroundColor3","accent")
+ local function paint(animate)
+  local ratio=math.clamp((value-low)/(high-low),0,1)
+  local pct=math.floor(ratio*100+.5)
+  valueLabel.Text=tostring(pct).."%"
+  local target=UDim2.fromScale(ratio,1)
+  if animate then
+   TweenService:Create(fill,TweenInfo.new(.18,Enum.EasingStyle.Quad),{Size=target}):Play()
+  else fill.Size=target end
+ end
+ local handle={}
+ function handle:Set(v,animate)
+  local nextValue=tonumber(v)
+  if not nextValue or nextValue~=nextValue then return false end
+  value=math.clamp(nextValue,low,high)
+  paint(animate==true)
+  return true
+ end
+ function handle:Get()return value end
+ function handle:SetLabel(v)label.Text=tostring(v)end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ paint(false)
+ return handle
+end
+-- Compact live status row with standard semantic colour categories.
+function Tab:CreateStatus(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(40,o.Name or "Status")
+ local label=make("TextLabel",{
+  Position=UDim2.fromOffset(12,5),Size=UDim2.new(.58,-12,1,-10),
+  Text=tostring(o.Name or "Status"),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.body,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local indicator=make("Frame",{
+  Position=UDim2.new(.62,0,.5,-4),Size=UDim2.fromOffset(8,8),
+  BorderSizePixel=0,BackgroundTransparency=0
+ },f)
+ round(indicator,4)
+ local valueLabel=make("TextLabel",{
+  Position=UDim2.new(.65,0,0,5),Size=UDim2.new(.35,-12,1,-10),
+  Text=tostring(o.Value or "Ready"),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Right,Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.label,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ local level="info"
+ local function paint()
+  local token=level=="success" and "accent" or (level=="error" and "danger" or "muted")
+  indicator.BackgroundColor3=w.colors[token]
+  valueLabel.TextColor3=w.colors[token]
+ end
+ w:_trackFeedback(f,paint)
+ local handle={}
+ function handle:Set(v,nextLevel)
+  valueLabel.Text=tostring(v or "")
+  if nextLevel~=nil then level=string.lower(tostring(nextLevel)) end
+  paint()
+ end
+ function handle:Get()return valueLabel.Text,level end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ handle:Set(o.Value or "Ready",o.Level or "info")
+ return handle
+end
+
 function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.dropdown)
+ local f=self:_base(Design.height.dropdown,o.Name or "Dropdown")
 
  local opts=o.Options or {}
  local multi=o.Multi==true
@@ -1123,7 +1568,7 @@ end
 function Tab:CreateInput(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.input)
+ local f=self:_base(Design.height.input,o.Name or "Input")
  local name=make("TextLabel",{
   Text=tostring(o.Name or "Input"),BackgroundTransparency=1,
   Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(11,2),
@@ -1198,7 +1643,7 @@ function Tab:CreateParagraph(o)
  local w=self.window
  local fixedHeight=tonumber(o.Height)
  local autoHeight=fixedHeight==nil
- local f=self:_base(fixedHeight and math.clamp(fixedHeight,56,220) or 56)
+ local f=self:_base(fixedHeight and math.clamp(fixedHeight,56,220) or 56,o.Title or "Information")
  local heading=make("TextLabel",{
   Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
@@ -1246,7 +1691,7 @@ function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
  local expanded=o.Expanded==true
- local f=self:_base(expanded and 230 or Design.height.toggle)
+ local f=self:_base(expanded and 230 or Design.height.toggle,o.Name or "Colour picker")
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
@@ -1479,7 +1924,7 @@ end
 function Tab:CreateKeybind(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.toggle)
+ local f=self:_base(Design.height.toggle,o.Name or "Keybind")
  local mode=o.Mode or "Toggle"
  if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
  local label=make("TextLabel",{
@@ -1564,7 +2009,7 @@ function Tab:CreateTextArea(o)
  o=o or {}
  local w=self.window
  local height=math.clamp(tonumber(o.Height) or 120,80,240)
- local f=self:_base(height)
+ local f=self:_base(height,o.Name or "Text")
  local label=make("TextLabel",{
   Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
   Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
@@ -1805,24 +2250,27 @@ function Window:_profileManager(tab,kind,store,onImported)
   end
   report("Rename",ok,why)
  end})
- local confirmName,confirmUntil
- tab:CreateButton({Name="Delete selected profile (confirm twice)",Callback=function()
-  local target=picker:Get()
-  if not target then w:Notify("No saved profile selected","WARN") return end
-  if confirmName~=target or os.clock()>(confirmUntil or 0) then
-   confirmName=target
-   confirmUntil=os.clock()+5
-   w:Notify("Click Delete again within 5 seconds to remove "..target,"WARN")
-   return
+ tab:CreateButton({
+  Name="Delete selected profile",Variant="Danger",
+  Description="Confirm before removing a saved profile",
+  Callback=function()
+   local target=picker:Get()
+   if not target then w:Notify("No saved profile selected","WARN") return end
+   w:Confirm({
+    Title="Delete profile?",
+    Content="Permanently delete '"..tostring(target).."'? This cannot be undone.",
+    ConfirmText="Delete",Danger=true,
+    OnConfirm=function()
+     local ok,why=store:Delete(target)
+     if ok then
+      refresh()
+      if w._autosaveTargets[kind]==target then w._autosaveTargets[kind]=nil end
+     end
+     report("Delete",ok,why)
+    end
+   })
   end
-  confirmName=nil
-  local ok,why=store:Delete(target)
-  if ok then
-   refresh()
-   if w._autosaveTargets[kind]==target then w._autosaveTargets[kind]=nil end
-  end
-  report("Delete",ok,why)
- end})
+ })
  tab:CreateToggle({Name="Auto-save selected profile (this session)",Default=false,Callback=function(enabled)
   local name=profile:Get()
   if enabled and not validName(name) then
@@ -1869,7 +2317,7 @@ function Lib:CreateWindow(o)
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
   fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 4,3,16),
-  _controlConnections={}
+  _controlConnections={},_searchItems={}
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
  if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
@@ -1906,18 +2354,24 @@ function Lib:CreateWindow(o)
  },top)
  w:_theme(headerLine,"BackgroundColor3","stroke")
  w:_theme(top,"BackgroundColor3","panel")
- local mark=make("Frame",{
-  Position=UDim2.fromOffset(14,15),Size=UDim2.fromOffset(20,20),
-  BorderSizePixel=0,ZIndex=7
+ -- No substitute dot logo. A Roblox-hosted image asset can show the fish artwork.
+ local fish=make("ImageLabel",{
+  Name="ReefFishIcon",BackgroundTransparency=1,BorderSizePixel=0,
+  Size=UDim2.fromOffset(34,34),Position=UDim2.fromOffset(9,9),
+  ScaleType=Enum.ScaleType.Fit,Image="",Visible=false,ZIndex=7
  },top)
- round(mark,7)
- w:_theme(mark,"BackgroundColor3","accent")
- local markDot=make("Frame",{
-  Position=UDim2.fromOffset(7,7),Size=UDim2.fromOffset(6,6),
-  BackgroundTransparency=.15,BorderSizePixel=0,ZIndex=8
- },mark)
- round(markDot,3)
- w:_theme(markDot,"BackgroundColor3","bg")
+ pcall(function()fish.ResampleMode=Enum.ResamplerMode.Pixelated end)
+ w._fishIcon=fish
+ function w:SetIcon(asset)
+  local id=imageAsset(asset)
+  fish.Image=id or ""
+  fish.Visible=id~=nil
+  local left=fish.Visible and 44 or 14
+  if w._title then w._title.Position=UDim2.fromOffset(left,6) end
+  if w._subtitle then w._subtitle.Position=UDim2.fromOffset(left,30) end
+  return id~=nil
+ end
+ w:SetIcon(o.Icon or o.IconAsset or Lib.DefaultIconAsset)
  local caption=make("TextLabel",{
   Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(44,6),
   Size=UDim2.new(1,-152,0,25),BackgroundTransparency=1,
@@ -1932,6 +2386,15 @@ function Lib:CreateWindow(o)
   Font=Enum.Font.Gotham,TextSize=Design.type.caption,ZIndex=7
  },top)
  w:_theme(subtitle,"TextColor3","muted")
+ w._title=caption
+ w._subtitle=subtitle
+ w:SetIcon(o.Icon or o.IconAsset or Lib.DefaultIconAsset)
+ local searchBtn=make("TextButton",{
+  Name="SearchSettings",Text="⌕",Size=UDim2.fromOffset(30,28),
+  Position=UDim2.new(1,-111,0,11),BorderSizePixel=0,
+  Font=Enum.Font.GothamBold,TextSize=19,ZIndex=7,AutoButtonColor=false
+ },top)
+ w._searchBtn=searchBtn
  local min=make("TextButton",{
   Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-76,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
@@ -1940,7 +2403,7 @@ function Lib:CreateWindow(o)
   Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-41,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
  },top)
- for _,b in ipairs({min,close}) do
+ for _,b in ipairs({searchBtn,min,close}) do
   round(b,Design.radius.control)
   w:_theme(b,"BackgroundColor3","raised")
   w:_theme(b,"TextColor3","text")
@@ -1995,6 +2458,10 @@ function Lib:CreateWindow(o)
  -- One window-level key dispatcher.
  w._connections[#w._connections+1]=UIS.InputBegan:Connect(function(i,processed)
   if i.UserInputType~=Enum.UserInputType.Keyboard then return end
+  if i.KeyCode==Enum.KeyCode.Escape then
+   if w._dialog then w._dialog:Cancel() return end
+   if w._searchOverlay then w:CloseSearch() return end
+  end
   if w._bindingCapture then
    if processed or UIS:GetFocusedTextBox() then return end
    local captured=w._bindingCapture
@@ -2011,6 +2478,12 @@ function Lib:CreateWindow(o)
    return
   end
   if processed or UIS:GetFocusedTextBox() then return end
+  if i.KeyCode==Enum.KeyCode.K
+    and (UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.RightControl))
+    and not w.hidden then
+   w:ToggleSearch()
+   return
+  end
   if i.KeyCode==w.toggleKey then w:SetHidden(not w.hidden) return end
   if w.hidden then return end
   for _,bind in ipairs(w._keybinds) do
@@ -2022,6 +2495,9 @@ function Lib:CreateWindow(o)
   for _,bind in ipairs(w._keybinds) do
    if bind:Get()==i.KeyCode.Name then bind:_input(false) end
   end
+ end)
+ w._connections[#w._connections+1]=searchBtn.MouseButton1Click:Connect(function()
+  w:ToggleSearch()
  end)
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
@@ -2038,7 +2514,9 @@ function Lib:CreateWindow(o)
   local pos=i.Position
   local minX=min.AbsolutePosition.X
   local closeX=close.AbsolutePosition.X
-  if (pos.X>=minX and pos.X<=minX+min.AbsoluteSize.X)
+  local searchX=searchBtn.AbsolutePosition.X
+  if (pos.X>=searchX and pos.X<=searchX+searchBtn.AbsoluteSize.X)
+   or (pos.X>=minX and pos.X<=minX+min.AbsoluteSize.X)
    or (pos.X>=closeX and pos.X<=closeX+close.AbsoluteSize.X) then return end
   dragging=true
   dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
