@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.2-alpha — Stabilization and lifecycle fixes
+
+- Correct title dragging so scaled initial window coordinates no longer cause a jump.
+- Keep requested window dimensions separate from temporary viewport fit; restore on viewport expansion.
+- Add horizontal scrollable tabs for narrow windows and responsive RGB colour picker inputs.
+- Replace the 50-option dropdown cutoff with a virtualized row pool and full-list scrolling.
+- Track touch identities for sliders and colour picker; ignore unrelated fingers.
+- Explicitly disconnect viewport watchers on destroy, and clean control-owned input events, flags, keybinds and theme bindings when removed.
+- Hide the status bar while minimized; adapt toast placement to smaller viewports.
+- Refresh the Studio smoke test with 120 options, control deletion and theme switching.
+- Preserve the same stable `dist/reefFish.lua` loader and existing public component APIs.
+- Static structural validation passed. Real Roblox Studio/mobile rendering and input tests are still outstanding.
+
 ## 0.4.1-alpha — Usability and reliability pass
 
 - Add draggable bottom-right resize grip, public `SetSize`, viewport clamping and adaptive sidebar widths.
