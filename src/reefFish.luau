@@ -585,22 +585,33 @@ end
 function Tab:CreateButton(o)
  o=o or {}
  local w=self.window
- local f=self:_base(35)
+ local f=self:_base(Design.height.button)
+ local variant=string.lower(tostring(o.Variant or o.Style or "secondary"))
+ if variant~="primary" and variant~="danger" then variant="secondary" end
+ local colored=variant~="secondary"
+ if colored then
+  f.BackgroundTransparency=0
+  round(f,Design.radius.control)
+  w:_theme(f,"BackgroundColor3",variant=="primary" and "accent" or "danger")
+ end
  local b=make("TextButton",{
-  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
-  Text="  "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
-  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Size=UDim2.new(1,-27,1,0),BackgroundTransparency=1,AutoButtonColor=false,
+  Text="   "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
+  TextTruncate=Enum.TextTruncate.AtEnd
  },f)
  local arrow=make("TextLabel",{
-  Text="›",BackgroundTransparency=1,
-  Size=UDim2.fromOffset(18,30),Position=UDim2.new(1,-26,0,2),
-  Font=Enum.Font.Gotham,TextSize=20
+  Text="→",BackgroundTransparency=1,
+  Size=UDim2.fromOffset(19,28),Position=UDim2.new(1,-31,.5,-14),
+  Font=Enum.Font.GothamMedium,TextSize=17
  },f)
- w:_theme(b,"TextColor3","text")
- w:_theme(arrow,"TextColor3","muted")
- w:_feedback(b,f)
+ w:_theme(b,"TextColor3",colored and "bg" or "text")
+ w:_theme(arrow,"TextColor3",colored and "bg" or "muted")
+ w:_feedback(b,f,colored and variant=="danger" and "danger" or (colored and "accent" or "panel"))
  local disabled=false
- w:_connectControl(f,b.MouseButton1Click,function()if not disabled then fire(o.Callback)end end)
+ w:_connectControl(f,b.MouseButton1Click,function()
+  if not disabled then fire(o.Callback) end
+ end)
  return {
   SetDisabled=function(_,v)
    disabled=v==true
@@ -614,30 +625,31 @@ end
 function Tab:CreateToggle(o)
  o=o or {}
  local w=self.window
- local f=self:_base(39)
+ local f=self:_base(Design.height.toggle)
  local value=o.Default==true
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
-  Text="  "..tostring(o.Name or "Toggle"),Font=Enum.Font.GothamMedium,
-  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Text="   "..tostring(o.Name or "Toggle"),Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
+  TextTruncate=Enum.TextTruncate.AtEnd
  },f)
  w:_theme(b,"TextColor3","text")
  local track=make("Frame",{
-  Size=UDim2.fromOffset(34,19),Position=UDim2.new(1,-45,.5,-9),
+  Size=UDim2.fromOffset(38,21),Position=UDim2.new(1,-50,.5,-10),
   BorderSizePixel=0,BackgroundColor3=w.colors.raised,Active=false
  },f)
  round(track,10)
  local knob=make("Frame",{
-  Size=UDim2.fromOffset(13,13),Position=UDim2.fromOffset(3,3),
+  Size=UDim2.fromOffset(15,15),Position=UDim2.fromOffset(3,3),
   BorderSizePixel=0,BackgroundColor3=w.colors.muted,Active=false
  },track)
- round(knob,7)
+ round(knob,8)
  w:_feedback(b,f)
  local disabled=false
  local function render(animate)
   local targetColor=value and w.colors.accent or w.colors.raised
   local knobColor=value and w.colors.bg or w.colors.muted
-  local targetPosition=UDim2.fromOffset(value and 18 or 3,3)
+  local targetPosition=UDim2.fromOffset(value and 20 or 3,3)
   if animate then
    TweenService:Create(track,TweenInfo.new(.15),{BackgroundColor3=targetColor}):Play()
    TweenService:Create(knob,TweenInfo.new(.15),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
@@ -677,25 +689,25 @@ end
 function Tab:CreateSlider(o)
  o=o or {}
  local w=self.window
- local f=self:_base(54)
+ local f=self:_base(Design.height.slider)
  local min,max=tonumber(o.Min) or 0,tonumber(o.Max) or 100
  if max<=min then max=min+1 end
  local inc=math.max(tonumber(o.Increment) or 1,0.000001)
  local value=math.clamp(tonumber(o.Default) or min,min,max)
  local label=make("TextLabel",{
   Text=tostring(o.Name or "Slider"),BackgroundTransparency=1,
-  Size=UDim2.new(1,-98,0,26),Position=UDim2.fromOffset(10,2),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Size=UDim2.new(1,-98,0,26),Position=UDim2.fromOffset(11,4),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left
  },f)
  w:_theme(label,"TextColor3","text")
  local valueLabel=make("TextLabel",{
   BackgroundTransparency=1,Size=UDim2.fromOffset(77,26),
-  Position=UDim2.new(1,-87,0,2),Font=Enum.Font.GothamMedium,
-  TextSize=12,TextXAlignment=Enum.TextXAlignment.Right
+  Position=UDim2.new(1,-87,0,4),Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Right
  },f)
- w:_theme(valueLabel,"TextColor3","accent")
+ w:_theme(valueLabel,"TextColor3","muted")
  local bar=make("TextButton",{
-  Size=UDim2.new(1,-22,0,18),Position=UDim2.fromOffset(11,30),
+  Size=UDim2.new(1,-24,0,18),Position=UDim2.fromOffset(12,36),
   BackgroundTransparency=1,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
  local track=make("Frame",{
