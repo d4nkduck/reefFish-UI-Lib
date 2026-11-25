@@ -134,6 +134,7 @@ local Tab={} Tab.__index=Tab
 function Window:_feedback(hitbox,surface,baseToken)
  local state="normal"
  local currentTween
+ local transparentIdle=surface.BackgroundTransparency>.95
  local function refresh(animate)
   if not surface.Parent then return end
   local base=self.colors[baseToken or "panel"] or self.colors.panel
@@ -144,11 +145,15 @@ function Window:_feedback(hitbox,surface,baseToken)
    target=base:Lerp(self.colors.accent,.12)
   end
   if currentTween then currentTween:Cancel() currentTween=nil end
+  local transparency=transparentIdle and (state=="normal" and 1 or (state=="pressed" and .58 or .75)) or 0
   if animate then
-   currentTween=TweenService:Create(surface,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=target})
+   currentTween=TweenService:Create(surface,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+    BackgroundColor3=target,BackgroundTransparency=transparency
+   })
    currentTween:Play()
   else
    surface.BackgroundColor3=target
+   surface.BackgroundTransparency=transparency
   end
  end
  self:_trackFeedback(surface,function()refresh(false)end)
@@ -348,7 +353,7 @@ function Window:_layout()
  -- Preserve intended dimensions when the viewport temporarily gets smaller.
  self.width=math.clamp(self.requestedWidth,math.min(330,maxWidth),maxWidth)
  self.height=math.clamp(self.requestedHeight,math.min(250,maxHeight),maxHeight)
- local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
+ local shownHeight=self.minimized and (Design.height.header+self.borderThickness*2) or self.height
  self.root.Size=UDim2.fromOffset(self.width,shownHeight)
  if self.nav and self.content then
   local compact=self.width<420
@@ -356,18 +361,18 @@ function Window:_layout()
   if compact then
    -- Mobile: horizontal, scrollable tab rail rather than a narrow sidebar.
    self.nav.Position=UDim2.fromOffset(0,0)
-   self.nav.Size=UDim2.new(1,0,0,42)
+   self.nav.Size=UDim2.new(1,0,0,46)
    self.nav.ScrollingDirection=Enum.ScrollingDirection.X
    self.nav.AutomaticCanvasSize=Enum.AutomaticSize.X
    if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Horizontal end
-   self.content.Position=UDim2.fromOffset(0,43)
-   self.content.Size=UDim2.new(1,0,1,-43)
+   self.content.Position=UDim2.fromOffset(0,47)
+   self.content.Size=UDim2.new(1,0,1,-47)
    if self._navDivider then
-    self._navDivider.Position=UDim2.fromOffset(0,42)
+    self._navDivider.Position=UDim2.fromOffset(0,46)
     self._navDivider.Size=UDim2.new(1,0,0,1)
    end
   else
-   local navWidth=math.clamp(math.floor(self.width*.26),105,155)
+   local navWidth=math.clamp(math.floor(self.width*.245),118,162)
    self.nav.Position=UDim2.fromOffset(0,0)
    self.nav.Size=UDim2.new(0,navWidth,1,0)
    self.nav.ScrollingDirection=Enum.ScrollingDirection.Y
@@ -381,7 +386,7 @@ function Window:_layout()
    end
   end
   for _,tab in ipairs(self.tabs) do
-   tab.button.Size=compact and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32)
+   tab.button.Size=compact and UDim2.fromOffset(124,36) or UDim2.new(1,-10,0,36)
   end
  end
  if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
@@ -465,14 +470,14 @@ function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
   Text="  "..tostring(name),LayoutOrder=#self.tabs+1,
-  Size=self._compactNav and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32),
-  Font=Enum.Font.GothamMedium,TextSize=12,
+  Size=self._compactNav and UDim2.fromOffset(124,36) or UDim2.new(1,-10,0,36),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
  },self.nav)
- round(button,5)
+ round(button,Design.radius.control)
  local indicator=make("Frame",{
-  Position=UDim2.fromOffset(0,7),Size=UDim2.fromOffset(2,18),
+  Position=UDim2.fromOffset(0,8),Size=UDim2.fromOffset(3,20),
   BorderSizePixel=0,Visible=false,Active=false
  },button)
  round(indicator,2)
@@ -1735,17 +1740,17 @@ function Lib:CreateWindow(o)
  local player=Players.LocalPlayer
  assert(player,"reefFish must run in a client LocalScript")
  local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
- local initialWidth=math.max(330,o.Size and o.Size.X.Offset or 560)
- local initialHeight=math.max(250,o.Size and o.Size.Y.Offset or 380)
+ local initialWidth=math.max(330,o.Size and o.Size.X.Offset or 600)
+ local initialHeight=math.max(250,o.Size and o.Size.Y.Offset or 420)
  local w=setmetatable({
   width=initialWidth,height=initialHeight,
   requestedWidth=initialWidth,requestedHeight=initialHeight,
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
+  rainEnabled=o.Rain==true,rainDensity=.43,rainSpeed=.25,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_boundOwners={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
-  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16),
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 4,3,16),
   _controlConnections={}
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
@@ -1769,44 +1774,61 @@ function Lib:CreateWindow(o)
  registry.__reefFishWindow=w
  w.screen=make("ScreenGui",{Name="reefFishUI",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},parent)
  w.root=make("Frame",{Size=UDim2.fromOffset(w.width,w.height),Position=UDim2.new(.5,-w.width/2,.5,-w.height/2),BorderSizePixel=0,ClipsDescendants=true},w.screen)
- w:_theme(w.root,"BackgroundColor3","border")
- round(w.root,9)
+ w:_theme(w.root,"BackgroundColor3","stroke")
+ round(w.root,Design.radius.window)
  local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
- round(inner,6)
+ round(inner,Design.radius.surface)
  w.inner=inner
- local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
+ local top=make("Frame",{Size=UDim2.new(1,0,0,Design.height.header),BorderSizePixel=0,ZIndex=6},inner)
+ local headerLine=make("Frame",{
+  Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BorderSizePixel=0,
+  BackgroundTransparency=.3,ZIndex=7
+ },top)
+ w:_theme(headerLine,"BackgroundColor3","stroke")
  w:_theme(top,"BackgroundColor3","panel")
+ local mark=make("Frame",{
+  Position=UDim2.fromOffset(14,15),Size=UDim2.fromOffset(20,20),
+  BorderSizePixel=0,ZIndex=7
+ },top)
+ round(mark,7)
+ w:_theme(mark,"BackgroundColor3","accent")
+ local markDot=make("Frame",{
+  Position=UDim2.fromOffset(7,7),Size=UDim2.fromOffset(6,6),
+  BackgroundTransparency=.15,BorderSizePixel=0,ZIndex=8
+ },mark)
+ round(markDot,3)
+ w:_theme(markDot,"BackgroundColor3","bg")
  local caption=make("TextLabel",{
-  Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(12,2),
-  Size=UDim2.new(1,-110,0,23),BackgroundTransparency=1,
+  Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(44,6),
+  Size=UDim2.new(1,-152,0,25),BackgroundTransparency=1,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.GothamBold,TextSize=15,ZIndex=7
+  Font=Enum.Font.GothamBold,TextSize=Design.type.title,ZIndex=7
  },top)
  w:_theme(caption,"TextColor3","text")
  local subtitle=make("TextLabel",{
-  Text="reefFish  /  "..Lib.Version,Position=UDim2.fromOffset(12,24),
-  Size=UDim2.new(1,-110,0,13),BackgroundTransparency=1,
+  Text="reefFish UI  ·  "..Lib.Version,Position=UDim2.fromOffset(44,30),
+  Size=UDim2.new(1,-152,0,14),BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.Gotham,TextSize=10,ZIndex=7
+  Font=Enum.Font.Gotham,TextSize=Design.type.caption,ZIndex=7
  },top)
  w:_theme(subtitle,"TextColor3","muted")
  local min=make("TextButton",{
-  Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-69,0,7),
+  Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-76,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
  },top)
  local close=make("TextButton",{
-  Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-36,0,7),
+  Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-41,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
  },top)
  for _,b in ipairs({min,close}) do
-  round(b,5)
+  round(b,Design.radius.control)
   w:_theme(b,"BackgroundColor3","raised")
   w:_theme(b,"TextColor3","text")
   w:_feedback(b,b,"raised")
  end
- w.body=make("Frame",{Position=UDim2.fromOffset(0,42),Size=UDim2.new(1,0,1,-66),BackgroundTransparency=1,ZIndex=6},inner)
+ w.body=make("Frame",{Position=UDim2.fromOffset(0,Design.height.header),Size=UDim2.new(1,0,1,-(Design.height.header+Design.height.footer)),BackgroundTransparency=1,ZIndex=6},inner)
  w.nav=make("ScrollingFrame",{
   Size=UDim2.new(.26,0,1,0),ScrollBarThickness=0,
   BackgroundTransparency=0,CanvasSize=UDim2.new(),
@@ -1814,10 +1836,10 @@ function Lib:CreateWindow(o)
  },w.body)
  w:_theme(w.nav,"BackgroundColor3","bg")
  make("UIPadding",{
-  PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,6),
-  PaddingRight=UDim.new(0,2),PaddingBottom=UDim.new(0,8)
+  PaddingTop=UDim.new(0,12),PaddingLeft=UDim.new(0,8),
+  PaddingRight=UDim.new(0,5),PaddingBottom=UDim.new(0,8)
  },w.nav)
- w._navLayout=make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
+ w._navLayout=make("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
  local navDivider=make("Frame",{
   Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
   BorderSizePixel=0,ZIndex=7,Active=false
@@ -1829,10 +1851,10 @@ function Lib:CreateWindow(o)
   BackgroundTransparency=1,ZIndex=6
  },w.body)
  w._status=make("TextLabel",{
-  Text="reefFish  •  Ready",Position=UDim2.new(0,11,1,-24),
-  Size=UDim2.new(1,-22,0,22),BackgroundTransparency=1,
+  Text="Ready",Position=UDim2.new(0,14,1,-25),
+  Size=UDim2.new(1,-28,0,23),BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,
-  TextSize=11,ZIndex=6
+  TextSize=Design.type.caption,ZIndex=6
  },inner)
  w:_theme(w._status,"TextColor3","muted")
  w._resizeGrip=make("TextButton",{
