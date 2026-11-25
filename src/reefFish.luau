@@ -288,25 +288,36 @@ function Window:Toast(info)
   Size=UDim2.new(1,0,0,58),BackgroundColor3=self.colors.panel,
   BackgroundTransparency=1,BorderSizePixel=0,ZIndex=180
  },self._toastLayer)
- round(frame,6)
- make("UIStroke",{Color=self.colors.muted,Thickness=1,Transparency=.65},frame)
+ round(frame,Design.radius.surface)
+ self:_theme(frame,"BackgroundColor3","panel")
+ local toastStroke=make("UIStroke",{Thickness=1,Transparency=.5},frame)
+ self:_theme(toastStroke,"Color","stroke")
+ local accentBar=make("Frame",{
+  Position=UDim2.fromOffset(0,11),Size=UDim2.fromOffset(3,36),
+  BorderSizePixel=0,ZIndex=181
+ },frame)
+ round(accentBar,2)
+ self:_theme(accentBar,"BackgroundColor3","accent")
  local heading=make("TextLabel",{
-  Text=title,TextColor3=self.colors.accent,BackgroundTransparency=1,
-  Position=UDim2.fromOffset(8,3),Size=UDim2.new(1,-26,0,22),
-  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=12,
+  Text=title,TextColor3=self.colors.text,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(14,4),Size=UDim2.new(1,-42,0,22),
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=Design.type.label,
   TextTransparency=1,ZIndex=181
  },frame)
  local body=make("TextLabel",{
-  Text=content,TextColor3=self.colors.text,BackgroundTransparency=1,
-  Position=UDim2.fromOffset(8,23),Size=UDim2.new(1,-16,0,31),
+  Text=content,TextColor3=self.colors.muted,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(14,24),Size=UDim2.new(1,-28,0,31),
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
-  TextWrapped=true,Font=Enum.Font.Gotham,TextSize=11,TextTransparency=1,ZIndex=181
+  TextWrapped=true,Font=Enum.Font.Gotham,TextSize=Design.type.caption,TextTransparency=1,ZIndex=181
  },frame)
  local close=make("TextButton",{
   Text="×",TextColor3=self.colors.muted,BackgroundTransparency=1,
   Position=UDim2.new(1,-25,0,1),Size=UDim2.fromOffset(23,22),
   Font=Enum.Font.Gotham,TextSize=18,ZIndex=182
  },frame)
+ self:_theme(heading,"TextColor3","text")
+ self:_theme(body,"TextColor3","muted")
+ self:_theme(close,"TextColor3","muted")
  table.insert(self._toasts,frame)
  local function dismiss()
   if not frame.Parent then return end
@@ -373,6 +384,11 @@ function Window:_layout()
    self.nav.ScrollingDirection=Enum.ScrollingDirection.X
    self.nav.AutomaticCanvasSize=Enum.AutomaticSize.X
    if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Horizontal end
+   if self._navPadding then
+    self._navPadding.PaddingTop=UDim.new(0,5)
+    self._navPadding.PaddingBottom=UDim.new(0,4)
+    self._navPadding.PaddingLeft=UDim.new(0,8)
+   end
    self.content.Position=UDim2.fromOffset(0,47)
    self.content.Size=UDim2.new(1,0,1,-47)
    if self._navDivider then
@@ -386,6 +402,11 @@ function Window:_layout()
    self.nav.ScrollingDirection=Enum.ScrollingDirection.Y
    self.nav.AutomaticCanvasSize=Enum.AutomaticSize.Y
    if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Vertical end
+   if self._navPadding then
+    self._navPadding.PaddingTop=UDim.new(0,12)
+    self._navPadding.PaddingBottom=UDim.new(0,8)
+    self._navPadding.PaddingLeft=UDim.new(0,8)
+   end
    self.content.Position=UDim2.fromOffset(navWidth+3,0)
    self.content.Size=UDim2.new(1,-navWidth-3,1,0)
    if self._navDivider then
@@ -1866,7 +1887,7 @@ function Lib:CreateWindow(o)
   AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6
  },w.body)
  w:_theme(w.nav,"BackgroundColor3","bg")
- make("UIPadding",{
+ w._navPadding=make("UIPadding",{
   PaddingTop=UDim.new(0,12),PaddingLeft=UDim.new(0,8),
   PaddingRight=UDim.new(0,5),PaddingBottom=UDim.new(0,8)
  },w.nav)
