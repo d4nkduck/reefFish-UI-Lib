@@ -484,10 +484,10 @@ function Window:CreateTab(opts)
   Visible=false,BorderSizePixel=0
  },self.content)
  make("UIPadding",{
-  PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),
-  PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)
+  PaddingTop=UDim.new(0,Design.space.md),PaddingBottom=UDim.new(0,Design.space.lg),
+  PaddingLeft=UDim.new(0,Design.space.md),PaddingRight=UDim.new(0,Design.space.md)
  },page)
- make("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder},page)
+ make("UIListLayout",{Padding=UDim.new(0,Design.space.sm),SortOrder=Enum.SortOrder.LayoutOrder},page)
  local t=setmetatable({window=self,button=button,page=page,indicator=indicator},Tab)
  self:_theme(button,"TextColor3","muted")
  self:_theme(button,"BackgroundColor3","bg")
@@ -504,29 +504,63 @@ function Window:CreateTab(opts)
 end
 function Tab:_base(height)
  local w=self.window
- local frame=make("Frame",{Size=UDim2.new(1,-4,0,height),BorderSizePixel=0},self.page)
- round(frame,6)
- w:_theme(frame,"BackgroundColor3","panel")
+ local grouped=self._group~=nil and self._group.Parent~=nil
+ local frame=make("Frame",{
+  Size=UDim2.new(1,grouped and 0 or -4,0,height),
+  BackgroundTransparency=grouped and 1 or 0,
+  BorderSizePixel=0
+ },grouped and self._group or self.page)
+ if not grouped then
+  round(frame,Design.radius.surface)
+  w:_theme(frame,"BackgroundColor3","panel")
+  local edge=make("UIStroke",{Thickness=1,Transparency=.65},frame)
+  w:_theme(edge,"Color","stroke")
+ else
+  -- A single section surface holds related settings, with quiet row separators.
+  local separator=make("Frame",{
+   Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),
+   BorderSizePixel=0,BackgroundTransparency=.68,Active=false
+  },frame)
+  w:_theme(separator,"BackgroundColor3","stroke")
+ end
  return frame
 end
 function Tab:CreateSection(name)
- -- Sections are quiet dividers, not another raised card.
+ local w=self.window
  local f=make("Frame",{
-  Size=UDim2.new(1,-4,0,27),BackgroundTransparency=1,BorderSizePixel=0
+  Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1,BorderSizePixel=0
  },self.page)
- local l=make("TextLabel",{
-  BackgroundTransparency=1,Size=UDim2.new(1,-12,1,0),
-  Position=UDim2.fromOffset(4,0),Text=tostring(name),
-  Font=Enum.Font.GothamBold,TextSize=11,
+ local label=make("TextLabel",{
+  BackgroundTransparency=1,Size=UDim2.new(1,-18,1,0),
+  Position=UDim2.fromOffset(7,0),Text=tostring(name),
+  Font=Enum.Font.GothamBold,TextSize=Design.type.section,
   TextXAlignment=Enum.TextXAlignment.Left
  },f)
- self.window:_theme(l,"TextColor3","muted")
+ w:_theme(label,"TextColor3","muted")
+ local group=make("Frame",{
+  Size=UDim2.new(1,-4,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+  BackgroundTransparency=0,BorderSizePixel=0
+ },self.page)
+ round(group,Design.radius.surface)
+ w:_theme(group,"BackgroundColor3","panel")
+ local border=make("UIStroke",{Thickness=1,Transparency=.62},group)
+ w:_theme(border,"Color","stroke")
+ make("UIPadding",{
+  PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),
+  PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,4)
+ },group)
+ make("UIListLayout",{Padding=UDim.new(0,0),SortOrder=Enum.SortOrder.LayoutOrder},group)
+ self._group=group
  return f
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
  local f=self:_base(32)
- local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,TextSize=12,TextWrapped=true},f)
+ local l=make("TextLabel",{
+  BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),
+  Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.Gotham,TextSize=Design.type.body,TextWrapped=true
+ },f)
  self.window:_theme(l,"TextColor3","text")
  return {
   SetText=function(_,v)l.Text=tostring(v)end,
