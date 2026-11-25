@@ -1,17 +1,55 @@
--- reefFish UI Lib v0.4.2-alpha
+-- reefFish UI Lib v0.4.3-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.2-alpha"}
+local Lib={Version="0.4.3-alpha"}
+-- Foundation tokens: neutral surfaces and a separate optional accent/rain layer.
+local Design={
+ space={xs=4,sm=8,md=12,lg=16,xl=20},
+ radius={small=5,control=7,surface=10,window=13},
+ type={caption=10,label=12,body=13,section=11,title=17},
+ height={header=52,footer=25,button=40,toggle=44,slider=60,dropdown=70,input=68}
+}
+Lib.Design=Design
 local palettes={
- MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
- ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
- AmberTerminal={bg=Color3.fromRGB(23,18,11),panel=Color3.fromRGB(35,27,17),raised=Color3.fromRGB(48,35,20),border=Color3.fromRGB(214,156,48),ink=Color3.fromRGB(83,54,9),accent=Color3.fromRGB(255,214,138),text=Color3.fromRGB(240,226,202),muted=Color3.fromRGB(170,148,110)},
- IceConsole={bg=Color3.fromRGB(11,18,24),panel=Color3.fromRGB(15,27,35),raised=Color3.fromRGB(24,42,52),border=Color3.fromRGB(70,159,201),ink=Color3.fromRGB(22,60,80),accent=Color3.fromRGB(140,229,255),text=Color3.fromRGB(214,231,238),muted=Color3.fromRGB(130,164,176)},
- Monochrome={bg=Color3.fromRGB(17,17,17),panel=Color3.fromRGB(26,26,26),raised=Color3.fromRGB(39,39,39),border=Color3.fromRGB(148,148,148),ink=Color3.fromRGB(51,51,51),accent=Color3.fromRGB(240,240,240),text=Color3.fromRGB(220,220,220),muted=Color3.fromRGB(159,159,159)}
+ MatrixInverse={
+  bg=Color3.fromRGB(13,17,21),panel=Color3.fromRGB(22,28,33),
+  raised=Color3.fromRGB(31,39,45),stroke=Color3.fromRGB(49,61,68),
+  border=Color3.fromRGB(31,179,111),ink=Color3.fromRGB(8,62,40),
+  accent=Color3.fromRGB(115,224,162),text=Color3.fromRGB(231,238,240),
+  muted=Color3.fromRGB(148,166,171)
+ },
+ ClassicCRT={
+  bg=Color3.fromRGB(12,18,15),panel=Color3.fromRGB(20,29,23),
+  raised=Color3.fromRGB(28,42,32),stroke=Color3.fromRGB(48,68,53),
+  border=Color3.fromRGB(26,151,83),ink=Color3.fromRGB(9,55,29),
+  accent=Color3.fromRGB(111,224,147),text=Color3.fromRGB(228,240,230),
+  muted=Color3.fromRGB(147,173,151)
+ },
+ AmberTerminal={
+  bg=Color3.fromRGB(21,19,17),panel=Color3.fromRGB(32,28,24),
+  raised=Color3.fromRGB(43,38,31),stroke=Color3.fromRGB(73,60,43),
+  border=Color3.fromRGB(198,144,61),ink=Color3.fromRGB(80,54,20),
+  accent=Color3.fromRGB(238,190,114),text=Color3.fromRGB(242,234,220),
+  muted=Color3.fromRGB(175,157,131)
+ },
+ IceConsole={
+  bg=Color3.fromRGB(13,19,25),panel=Color3.fromRGB(20,29,38),
+  raised=Color3.fromRGB(29,42,53),stroke=Color3.fromRGB(50,69,82),
+  border=Color3.fromRGB(62,149,196),ink=Color3.fromRGB(23,58,80),
+  accent=Color3.fromRGB(145,214,242),text=Color3.fromRGB(230,238,244),
+  muted=Color3.fromRGB(152,175,187)
+ },
+ Monochrome={
+  bg=Color3.fromRGB(17,18,20),panel=Color3.fromRGB(27,29,32),
+  raised=Color3.fromRGB(39,42,46),stroke=Color3.fromRGB(65,70,76),
+  border=Color3.fromRGB(150,155,161),ink=Color3.fromRGB(51,55,60),
+  accent=Color3.fromRGB(236,238,241),text=Color3.fromRGB(232,233,236),
+  muted=Color3.fromRGB(163,169,176)
+ }
 }
 Lib.Themes=palettes
 local function make(class,props,parent)
@@ -20,7 +58,7 @@ local function make(class,props,parent)
  x.Parent=parent
  return x
 end
-local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 6)},x) end
+local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or Design.radius.control)},x) end
 local function fire(fn,...)
  if type(fn)=="function" then local ok,err=pcall(fn,...) if not ok then warn("[reefFish]",err) end end
 end
@@ -101,13 +139,13 @@ function Window:_feedback(hitbox,surface,baseToken)
   local base=self.colors[baseToken or "panel"] or self.colors.panel
   local target=base
   if state=="hover" then
-   target=base:Lerp(self.colors.accent,.08)
+   target=base:Lerp(self.colors.accent,.055)
   elseif state=="pressed" then
-   target=base:Lerp(self.colors.accent,.16)
+   target=base:Lerp(self.colors.accent,.12)
   end
   if currentTween then currentTween:Cancel() currentTween=nil end
   if animate then
-   currentTween=TweenService:Create(surface,TweenInfo.new(.12,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=target})
+   currentTween=TweenService:Create(surface,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=target})
    currentTween:Play()
   else
    surface.BackgroundColor3=target
