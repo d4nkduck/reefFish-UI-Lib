@@ -1,11 +1,14 @@
--- reefFish UI Lib v0.4.4-alpha
+-- reefFish UI Lib v0.5.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.4-alpha"}
+local Lib={Version="0.5.0-alpha"}
+-- Public artwork source. Roblox UI requires a Roblox image asset ID at runtime.
+Lib.IconSource="https://raw.githubusercontent.com/d4nkduck/reefFish-UI-Lib/main/assets/reefFish-icon.png"
+Lib.DefaultIconAsset=nil
 -- Foundation tokens: neutral surfaces and a separate optional accent/rain layer.
 local Design={
  space={xs=4,sm=8,md=12,lg=16,xl=20},
@@ -1906,18 +1909,30 @@ function Lib:CreateWindow(o)
  },top)
  w:_theme(headerLine,"BackgroundColor3","stroke")
  w:_theme(top,"BackgroundColor3","panel")
- local mark=make("Frame",{
-  Position=UDim2.fromOffset(14,15),Size=UDim2.fromOffset(20,20),
-  BorderSizePixel=0,ZIndex=7
+ -- No substitute dot logo. A Roblox-hosted image asset can show the fish artwork.
+ local fish=make("ImageLabel",{
+  Name="ReefFishIcon",BackgroundTransparency=1,BorderSizePixel=0,
+  Size=UDim2.fromOffset(34,34),Position=UDim2.fromOffset(9,9),
+  ScaleType=Enum.ScaleType.Fit,Image="",Visible=false,ZIndex=7
  },top)
- round(mark,7)
- w:_theme(mark,"BackgroundColor3","accent")
- local markDot=make("Frame",{
-  Position=UDim2.fromOffset(7,7),Size=UDim2.fromOffset(6,6),
-  BackgroundTransparency=.15,BorderSizePixel=0,ZIndex=8
- },mark)
- round(markDot,3)
- w:_theme(markDot,"BackgroundColor3","bg")
+ pcall(function()fish.ResampleMode=Enum.ResamplerMode.Pixelated end)
+ w._fishIcon=fish
+ local function setLogo(asset)
+  local id=asset
+  if type(asset)=="number" then id=tostring(math.floor(asset)) end
+  if type(id)=="string" and id:match("^%d+$") then id="rbxassetid://"..id end
+  local valid=type(id)=="string" and (
+   id:match("^rbxassetid://%d+$")~=nil
+   or id:match("^rbxasset://[%w_/%-%.]+$")~=nil
+  )
+  fish.Image=valid and id or ""
+  fish.Visible=valid and true or false
+  return valid==true
+ end
+ function w:SetIcon(asset)
+  return setLogo(asset)
+ end
+ w:SetIcon(o.Icon or o.IconAsset or Lib.DefaultIconAsset)
  local caption=make("TextLabel",{
   Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(44,6),
   Size=UDim2.new(1,-152,0,25),BackgroundTransparency=1,
@@ -1932,6 +1947,8 @@ function Lib:CreateWindow(o)
   Font=Enum.Font.Gotham,TextSize=Design.type.caption,ZIndex=7
  },top)
  w:_theme(subtitle,"TextColor3","muted")
+ w._title=caption
+ w._subtitle=subtitle
  local min=make("TextButton",{
   Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-76,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
