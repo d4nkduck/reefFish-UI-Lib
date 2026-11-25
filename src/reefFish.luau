@@ -497,10 +497,36 @@ function Window:Destroy()
  table.clear(self._boundOwners)
  table.clear(self._feedbackRefresh)
  table.clear(self._keybinds)
+ table.clear(self._searchItems)
  table.clear(self._connections)
  if self._registry and self._registry.__reefFishWindow==self then
   self._registry.__reefFishWindow=nil
  end
+end
+function Window:_indexControl(tab,frame,title)
+ local label=tostring(title or "")
+ if #label>100 then label=label:sub(1,100) end
+ if label=="" then return end
+ self._searchItems[#self._searchItems+1]={
+  tab=tab,frame=frame,title=label,
+  key=string.lower(tostring(tab.name or "").." "..label)
+ }
+end
+function Window:FindControls(query,limit)
+ local needle=string.lower(tostring(query or ""))
+ local results={}
+ limit=math.clamp(math.floor(tonumber(limit) or 20),1,100)
+ for i=#self._searchItems,1,-1 do
+  local entry=self._searchItems[i]
+  if not entry.frame.Parent then table.remove(self._searchItems,i) end
+ end
+ for _,entry in ipairs(self._searchItems) do
+  if needle=="" or string.find(entry.key,needle,1,true) then
+   results[#results+1]=entry
+   if #results>=limit then break end
+  end
+ end
+ return results
 end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
@@ -529,7 +555,7 @@ function Window:CreateTab(opts)
   PaddingLeft=UDim.new(0,Design.space.md),PaddingRight=UDim.new(0,Design.space.md)
  },page)
  make("UIListLayout",{Padding=UDim.new(0,Design.space.sm),SortOrder=Enum.SortOrder.LayoutOrder},page)
- local t=setmetatable({window=self,button=button,page=page,indicator=indicator},Tab)
+ local t=setmetatable({window=self,button=button,page=page,indicator=indicator,name=tostring(name)},Tab)
  self:_theme(button,"TextColor3","muted")
  self:_theme(button,"BackgroundColor3","bg")
  self.tabs[#self.tabs+1]=t
@@ -547,7 +573,7 @@ function Window:CreateTab(opts)
  if #self.tabs==1 then self:SelectTab(t) end
  return t
 end
-function Tab:_base(height)
+function Tab:_base(height,searchLabel)
  local w=self.window
  local grouped=self._group~=nil and self._group.Parent~=nil
  local order
@@ -575,6 +601,9 @@ function Tab:_base(height)
    BorderSizePixel=0,BackgroundTransparency=.68,Active=false
   },frame)
   w:_theme(separator,"BackgroundColor3","stroke")
+ end
+ if searchLabel~=nil then
+  w:_indexControl(self,frame,tostring(searchLabel))
  end
  return frame
 end
@@ -625,7 +654,7 @@ function Tab:CreateSection(name)
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
- local f=self:_base(32)
+ local f=self:_base(32,o.Text or "Label")
  local l=make("TextLabel",{
   BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),
   Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,
@@ -643,7 +672,7 @@ function Tab:CreateButton(o)
  o=o or {}
  local w=self.window
  local hasDescription=type(o.Description)=="string" and o.Description~=""
- local f=self:_base(hasDescription and 59 or Design.height.button)
+ local f=self:_base(hasDescription and 59 or Design.height.button,o.Name or "Button")
  local variant=string.lower(tostring(o.Variant or o.Style or "secondary"))
  if variant~="primary" and variant~="danger" then variant="secondary" end
  local colored=variant~="secondary"
@@ -699,7 +728,7 @@ function Tab:CreateToggle(o)
  o=o or {}
  local w=self.window
  local hasDescription=type(o.Description)=="string" and o.Description~=""
- local f=self:_base(hasDescription and 62 or Design.height.toggle)
+ local f=self:_base(hasDescription and 62 or Design.height.toggle,o.Name or "Toggle")
  local value=o.Default==true
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
@@ -779,7 +808,7 @@ end
 function Tab:CreateSlider(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.slider)
+ local f=self:_base(Design.height.slider,o.Name or "Slider")
  local min,max=tonumber(o.Min) or 0,tonumber(o.Max) or 100
  if max<=min then max=min+1 end
  local inc=math.max(tonumber(o.Increment) or 1,0.000001)
@@ -880,7 +909,7 @@ function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.dropdown)
+ local f=self:_base(Design.height.dropdown,o.Name or "Dropdown")
 
  local opts=o.Options or {}
  local multi=o.Multi==true
@@ -1126,7 +1155,7 @@ end
 function Tab:CreateInput(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.input)
+ local f=self:_base(Design.height.input,o.Name or "Input")
  local name=make("TextLabel",{
   Text=tostring(o.Name or "Input"),BackgroundTransparency=1,
   Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(11,2),
@@ -1201,7 +1230,7 @@ function Tab:CreateParagraph(o)
  local w=self.window
  local fixedHeight=tonumber(o.Height)
  local autoHeight=fixedHeight==nil
- local f=self:_base(fixedHeight and math.clamp(fixedHeight,56,220) or 56)
+ local f=self:_base(fixedHeight and math.clamp(fixedHeight,56,220) or 56,o.Title or "Information")
  local heading=make("TextLabel",{
   Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
@@ -1249,7 +1278,7 @@ function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
  local expanded=o.Expanded==true
- local f=self:_base(expanded and 230 or Design.height.toggle)
+ local f=self:_base(expanded and 230 or Design.height.toggle,o.Name or "Colour picker")
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
@@ -1482,7 +1511,7 @@ end
 function Tab:CreateKeybind(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.toggle)
+ local f=self:_base(Design.height.toggle,o.Name or "Keybind")
  local mode=o.Mode or "Toggle"
  if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
  local label=make("TextLabel",{
@@ -1567,7 +1596,7 @@ function Tab:CreateTextArea(o)
  o=o or {}
  local w=self.window
  local height=math.clamp(tonumber(o.Height) or 120,80,240)
- local f=self:_base(height)
+ local f=self:_base(height,o.Name or "Text")
  local label=make("TextLabel",{
   Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
   Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
@@ -1872,7 +1901,7 @@ function Lib:CreateWindow(o)
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
   fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 4,3,16),
-  _controlConnections={}
+  _controlConnections={},_searchItems={}
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
  if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
