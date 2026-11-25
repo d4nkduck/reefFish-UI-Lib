@@ -598,6 +598,22 @@ function Window:_indexControl(tab,frame,title)
   key=string.lower(tostring(tab.name or "").." "..label)
  }
 end
+function Window:GetDiagnostics()
+ local counts={windowEvents=#self._connections,controlEvents=0,tabs=#self.tabs,controls=0,flags=0}
+ for _,bucket in pairs(self._controlConnections or {}) do
+  counts.controlEvents+=#bucket
+ end
+ for _,entry in ipairs(self._searchItems or {}) do
+  if entry.frame.Parent then counts.controls+=1 end
+ end
+ for _ in pairs(self.flags or {}) do counts.flags+=1 end
+ return {
+  version=Lib.Version,theme=self.themeName,hidden=self.hidden,
+  minimized=self.minimized,destroyed=self.destroyed,
+  rain=self.rainEnabled,storage=self.StorageMode,
+  size=Vector2.new(self.width,self.height),counts=counts
+ }
+end
 function Window:FindControls(query,limit)
  local needle=string.lower(tostring(query or ""))
  local results={}
@@ -1162,6 +1178,107 @@ function Tab:CreateSlider(o)
  render()
  return handle
 end
+-- Read-only progress component for loading, tasks and diagnostic work.
+function Tab:CreateProgressBar(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(58,o.Name or "Progress")
+ local low=tonumber(o.Min) or 0
+ local high=tonumber(o.Max) or 100
+ if high<=low then high=low+1 end
+ local value=math.clamp(tonumber(o.Default) or low,low,high)
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "Progress"),BackgroundTransparency=1,
+  Position=UDim2.fromOffset(11,4),Size=UDim2.new(1,-112,0,25),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local valueLabel=make("TextLabel",{
+  BackgroundTransparency=1,
+  Position=UDim2.new(1,-94,0,4),Size=UDim2.fromOffset(80,25),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,
+  TextXAlignment=Enum.TextXAlignment.Right
+ },f)
+ w:_theme(valueLabel,"TextColor3","muted")
+ local track=make("Frame",{
+  Position=UDim2.fromOffset(12,38),Size=UDim2.new(1,-24,0,7),
+  BorderSizePixel=0
+ },f)
+ round(track,4)
+ w:_theme(track,"BackgroundColor3","raised")
+ local fill=make("Frame",{
+  Size=UDim2.fromScale(0,1),BorderSizePixel=0
+ },track)
+ round(fill,4)
+ w:_theme(fill,"BackgroundColor3","accent")
+ local function paint(animate)
+  local ratio=math.clamp((value-low)/(high-low),0,1)
+  local pct=math.floor(ratio*100+.5)
+  valueLabel.Text=tostring(pct).."%"
+  local target=UDim2.fromScale(ratio,1)
+  if animate then
+   TweenService:Create(fill,TweenInfo.new(.18,Enum.EasingStyle.Quad),{Size=target}):Play()
+  else fill.Size=target end
+ end
+ local handle={}
+ function handle:Set(v,animate)
+  local nextValue=tonumber(v)
+  if not nextValue or nextValue~=nextValue then return false end
+  value=math.clamp(nextValue,low,high)
+  paint(animate==true)
+  return true
+ end
+ function handle:Get()return value end
+ function handle:SetLabel(v)label.Text=tostring(v)end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ paint(false)
+ return handle
+end
+-- Compact live status row with standard semantic colour categories.
+function Tab:CreateStatus(o)
+ o=o or {}
+ local w=self.window
+ local f=self:_base(40,o.Name or "Status")
+ local label=make("TextLabel",{
+  Position=UDim2.fromOffset(12,5),Size=UDim2.new(.58,-12,1,-10),
+  Text=tostring(o.Name or "Status"),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.body,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local indicator=make("Frame",{
+  Position=UDim2.new(.62,0,.5,-4),Size=UDim2.fromOffset(8,8),
+  BorderSizePixel=0,BackgroundTransparency=0
+ },f)
+ round(indicator,4)
+ local valueLabel=make("TextLabel",{
+  Position=UDim2.new(.65,0,0,5),Size=UDim2.new(.35,-12,1,-10),
+  Text=tostring(o.Value or "Ready"),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Right,Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.label,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ local level="info"
+ local function paint()
+  local token=level=="success" and "accent" or (level=="error" and "danger" or "muted")
+  indicator.BackgroundColor3=w.colors[token]
+  valueLabel.TextColor3=w.colors[token]
+ end
+ w:_trackFeedback(f,paint)
+ local handle={}
+ function handle:Set(v,nextLevel)
+  valueLabel.Text=tostring(v or "")
+  if nextLevel~=nil then level=string.lower(tostring(nextLevel)) end
+  paint()
+ end
+ function handle:Get()return valueLabel.Text,level end
+ function handle:SetVisible(v)f.Visible=v~=false end
+ function handle:Destroy()f:Destroy()end
+ handle:Set(o.Value or "Ready",o.Level or "info")
+ return handle
+end
+
 function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
