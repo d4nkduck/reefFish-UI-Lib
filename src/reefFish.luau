@@ -438,60 +438,91 @@ function Tab:CreateToggle(o)
  return handle
 end
 function Tab:CreateSlider(o)
+ o=o or {}
  local w=self.window
- local f=self:_base(55)
+ local f=self:_base(54)
  local min,max=tonumber(o.Min) or 0,tonumber(o.Max) or 100
  if max<=min then max=min+1 end
  local inc=math.max(tonumber(o.Increment) or 1,0.000001)
  local value=math.clamp(tonumber(o.Default) or min,min,max)
- local name=make("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
- w:_theme(name,"TextColor3","text")
- local bar=make("TextButton",{Size=UDim2.new(1,-16,0,8),Position=UDim2.new(0,8,0,36),BorderSizePixel=0,Text="",AutoButtonColor=false},f)
- w:_theme(bar,"BackgroundColor3","panel")
- round(bar,4)
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "Slider"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-98,0,26),Position=UDim2.fromOffset(10,2),
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local valueLabel=make("TextLabel",{
+  BackgroundTransparency=1,Size=UDim2.fromOffset(77,26),
+  Position=UDim2.new(1,-87,0,2),Font=Enum.Font.GothamMedium,
+  TextSize=12,TextXAlignment=Enum.TextXAlignment.Right
+ },f)
+ w:_theme(valueLabel,"TextColor3","accent")
+ local bar=make("TextButton",{
+  Size=UDim2.new(1,-22,0,6),Position=UDim2.fromOffset(11,36),
+  BorderSizePixel=0,Text="",AutoButtonColor=false
+ },f)
+ w:_theme(bar,"BackgroundColor3","raised")
+ round(bar,3)
  local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},bar)
  w:_theme(fill,"BackgroundColor3","accent")
- round(fill,4)
+ round(fill,3)
  local thumb=make("Frame",{
   AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(0,.5),
-  Size=UDim2.fromOffset(14,14),BorderSizePixel=0,Active=false
+  Size=UDim2.fromOffset(12,12),BorderSizePixel=0,Active=false
  },bar)
  w:_theme(thumb,"BackgroundColor3","accent")
- round(thumb,7)
+ round(thumb,6)
  local handle={}
  local disabled=false
- function handle:SetDisabled(v)disabled=v==true f.BackgroundTransparency=disabled and .5 or 0 end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  f.BackgroundTransparency=disabled and .45 or 0
+ end
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  local function render()
-  name.Text=tostring(o.Name or "Slider").."  "..tostring(value)
+  valueLabel.Text=tostring(value)
   local progress=(value-min)/(max-min)
   fill.Size=UDim2.fromScale(progress,1)
   thumb.Position=UDim2.fromScale(progress,.5)
  end
  function handle:Get()return value end
  function handle:Set(v,notify)
-  if type(v)~="number" then return end
+  if type(v)~="number" then return false end
   value=math.clamp(min+math.floor(((v-min)/inc)+.5)*inc,min,max)
   render()
   if notify then
    if o.Flag then w:_markChanged("game") end
    fire(o.Callback,value)
   end
+  return true
  end
  local dragging=false
+ local function updateFromPosition(pos)
+  if disabled or not f.Parent then return end
+  local fraction=math.clamp((pos.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
+  handle:Set(min+fraction*(max-min),true)
+ end
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
-  if not disabled and (i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch) then dragging=true end
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   if not disabled then
+    dragging=true
+    updateFromPosition(i.Position)
+   end
+  end
  end)
  w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
  end)
  w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if not disabled and dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
-   handle:Set(min+math.clamp((i.Position.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)*(max-min),true)
+  if not f.Parent then dragging=false return end
+  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+   updateFromPosition(i.Position)
   end
  end)
- w:_register(o.Flag,handle) render() return handle
+ w:_register(o.Flag,handle)
+ render()
+ return handle
 end
 function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
