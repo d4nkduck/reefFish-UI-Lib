@@ -1649,8 +1649,8 @@ function Lib:CreateWindow(o)
   "ル","レ","ロ","ワ","ヲ","ン"}
  local cell=10
  local spacing=9
- local count=math.ceil(w.width/spacing)+4
- local fieldPeriod=count*spacing
+ local count=0
+ local fieldPeriod=spacing
  local streams={}
  local rainLayer=make("Frame",{
   Name="MatrixWallpaper",
@@ -1685,30 +1685,37 @@ function Lib:CreateWindow(o)
   end
   stream.label.Text=table.concat(lines,"\n")
  end
- for col=1,count do
-  local length=math.random(8,14)
-  local label=make("TextLabel",{
-   Name="RainColumn",
-   Size=UDim2.fromOffset(cell,length*cell+10),
-   Position=UDim2.fromOffset((col-2)*spacing,-length*cell),
-   BackgroundTransparency=1,BorderSizePixel=0,
-   Font=Enum.Font.Code,TextSize=10,LineHeight=1,
-   TextXAlignment=Enum.TextXAlignment.Center,
-   TextYAlignment=Enum.TextYAlignment.Top,
-   RichText=true,TextWrapped=false,TextScaled=false,
-   Text="0",ZIndex=3
-  },rainLayer)
-  local stream={
-   label=label,length=length,
-   y=math.random(-w.height,w.height),
-   x=(col-2)*spacing,
-   speed=math.random(25,60),
-   change=math.random(),
-   seed=col,glyphs={}
-  }
-  streams[col]=stream
-  updateText(stream,true)
+ local function ensureRainColumns(width)
+  local required=math.ceil(width/spacing)+4
+  for col=count+1,required do
+   local length=math.random(8,14)
+   local label=make("TextLabel",{
+    Name="RainColumn",
+    Size=UDim2.fromOffset(cell,length*cell+10),
+    Position=UDim2.fromOffset((col-2)*spacing,-length*cell),
+    BackgroundTransparency=1,BorderSizePixel=0,
+    Font=Enum.Font.Code,TextSize=10,LineHeight=1,
+    TextXAlignment=Enum.TextXAlignment.Center,
+    TextYAlignment=Enum.TextYAlignment.Top,
+    RichText=true,TextWrapped=false,TextScaled=false,
+    Text="0",ZIndex=3
+   },rainLayer)
+   local stream={
+    label=label,length=length,
+    y=math.random(-w.height,w.height),
+    x=(col-2)*spacing,
+    speed=math.random(25,60),
+    change=math.random(),
+    seed=col,glyphs={}
+   }
+   streams[col]=stream
+   updateText(stream,true)
+  end
+  count=math.max(count,required)
+  fieldPeriod=count*spacing
  end
+ w._ensureRainColumns=ensureRainColumns
+ ensureRainColumns(w.width)
  w._rainColumns=streams
  w._repaintRain=function()
   for _,stream in ipairs(streams) do updateText(stream) end
@@ -1716,9 +1723,12 @@ function Lib:CreateWindow(o)
  local elapsedBuffer=0
  local drift=0
  w._connections[#w._connections+1]=RunService.Heartbeat:Connect(function(dt)
-  if w.destroyed or not w.rainEnabled or w.minimized then return end
+  if w.destroyed or not w.rainEnabled or w.minimized or w.hidden or not w.screen.Enabled then
+   elapsedBuffer=0
+   return
+  end
   elapsedBuffer+=dt
-  if elapsedBuffer<.07 then return end -- at most 14 updates/second
+  if elapsedBuffer<.10 then return end -- at most 10 updates/second
   local elapsed=math.min(elapsedBuffer,.20)
   elapsedBuffer=0
   local width=w.root.AbsoluteSize.X
@@ -1737,7 +1747,7 @@ function Lib:CreateWindow(o)
    stream.change=stream.change+elapsed
    if stream.change>=.26 then
     stream.change=stream.change-.26
-    updateText(stream)
+    if stream.label.Visible then updateText(stream) end
    end
    local x=((stream.x+drift+spacing)%fieldPeriod)-spacing
    stream.label.Position=UDim2.fromOffset(math.floor(x),math.floor(stream.y-stream.length*cell))
