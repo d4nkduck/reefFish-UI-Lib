@@ -1,22 +1,29 @@
 # reefFish
 
-small UI lib for Luau. one file, no extra dependencies.
+A single-file UI library for Roblox/Luau. Mostly intended for script hubs, debug menus and small client-side tools.
 
-**0.5.0-alpha** · MIT
+Current version: **0.5.0-alpha**  
+License: MIT
 
-Made for script hubs, debug panels and other client-side tools. Dark UI, grouped settings, optional Matrix border. Rain is off by default because it shouldn't be carrying the design.
+It has the usual controls, profiles, themes and a few extra utilities. The Matrix border is optional and disabled by default. The UI should still look fine without it.
 
-Still alpha. Static checks are done before pushing builds, but not every update has been tested in a live Roblox client.
+This is an alpha build. Some things still need testing in Roblox, particularly mobile input and the newer search/dialog features.
 
-## load it
+## Installation
 
-**Studio:** put `src/reefFish.luau` in a ModuleScript named `ReefFish` under `ReplicatedStorage`. Run `examples/basic.luau` from a LocalScript in `StarterPlayerScripts`.
+### Roblox Studio
+
+Put `src/reefFish.luau` in a ModuleScript named `ReefFish` under `ReplicatedStorage`. Then require it from a LocalScript.
 
 ```lua
 local ReefFish = require(game.ReplicatedStorage.ReefFish)
 ```
 
-**Compatible Lua environments:** the single-file build lives at one URL.
+There's a working example in [`examples/basic.luau`](examples/basic.luau). You can put that in `StarterPlayerScripts` to see the components.
+
+### Single-file loader
+
+For environments that support `game:HttpGet` and `loadstring`:
 
 ```lua
 local ReefFish = loadstring(game:HttpGet(
@@ -24,124 +31,145 @@ local ReefFish = loadstring(game:HttpGet(
 ))()
 ```
 
-Regular Studio LocalScripts don't support that remote `loadstring` setup. Use `require` there.
+The URL always points to the latest build on `main`. Normal Studio LocalScripts should use the ModuleScript approach instead.
 
-## basic setup
+## Example
+
+Create a window, add a tab and put your controls in it.
 
 ```lua
 local win = ReefFish:CreateWindow({
-    Title = "my hub",
+    Title = "My Hub",
     Theme = "MatrixInverse",
     Rain = false,
 })
 
-local tab = win:CreateTab({Name = "Main"})
-tab:CreateSection("Main")
+local main = win:CreateTab({Name = "Main"})
+main:CreateSection("General")
 
-tab:CreateToggle({
-    Name = "Markers",
-    Flag = "markers",
+main:CreateToggle({
+    Name = "Show Markers",
+    Flag = "showMarkers",
     Default = false,
-    Callback = function(on)
-        print("markers:", on)
+    Callback = function(enabled)
+        print("Markers:", enabled)
     end,
 })
 
-tab:CreateSlider({
+main:CreateSlider({
     Name = "Speed",
     Flag = "speed",
     Min = 0,
     Max = 100,
     Default = 25,
     Callback = function(value)
-        print(value)
+        print("Speed:", value)
+    end,
+})
+
+main:CreateButton({
+    Name = "Test Notification",
+    Callback = function()
+        win:Notify("Working", "OK")
     end,
 })
 ```
 
-## controls
+Callbacks run when the user changes a control. Add a unique `Flag` if you want a value included in saved profiles.
 
-Most controls return a handle with `Get`, `Set`, `SetVisible`, `SetDisabled` or `Destroy` where applicable.
+## Components
 
-| Control | Call |
+| Component | Example |
 | --- | --- |
 | Tab | `win:CreateTab({Name="Main"})` |
-| Group | `tab:CreateSection("General")` |
-| Foldable group | `tab:CreateCollapsibleSection({Name="Extra", Expanded=false})` |
-| Label | `tab:CreateLabel({Text="ready"})` |
+| Section | `tab:CreateSection("General")` |
+| Collapsible section | `tab:CreateCollapsibleSection({Name="Advanced", Expanded=false})` |
+| Label | `tab:CreateLabel({Text="Ready"})` |
 | Button | `tab:CreateButton({Name="Run", Callback=fn})` |
 | Toggle | `tab:CreateToggle({Name="Enabled", Default=false, Callback=fn})` |
 | Slider | `tab:CreateSlider({Name="Amount", Min=0, Max=100, Default=20})` |
 | Dropdown | `tab:CreateDropdown({Name="Mode", Options={"A","B"}, Default="A"})` |
-| Multi dropdown | `tab:CreateMultiDropdown({Name="Flags", Options={"A","B"}, Default={"A"}})` |
-| Input | `tab:CreateInput({Name="Value", Default="", Numeric=false})` |
-| Paragraph | `tab:CreateParagraph({Title="Info", Content="..."})` |
-| Colour | `tab:CreateColorPicker({Name="Accent", Default=Color3.fromRGB(80,200,130)})` |
+| Multi-dropdown | `tab:CreateMultiDropdown({Name="Filters", Options={"A","B"}, Default={"A"}})` |
+| Input | `tab:CreateInput({Name="Value", Default=""})` |
+| Paragraph | `tab:CreateParagraph({Title="Info", Content="Some details."})` |
+| Colour picker | `tab:CreateColorPicker({Name="Accent", Default=Color3.fromRGB(80,200,130)})` |
 | Keybind | `tab:CreateKeybind({Name="Hotkey", Default="F6", Mode="Toggle"})` |
 | Text area | `tab:CreateTextArea({Name="JSON", Height=120})` |
-| Progress | `tab:CreateProgressBar({Name="Task", Min=0, Max=100, Default=0})` |
+| Progress bar | `tab:CreateProgressBar({Name="Loading", Min=0, Max=100, Default=0})` |
 | Status | `tab:CreateStatus({Name="Connection", Value="Ready", Level="success"})` |
 
-`CreateButton` supports `Variant="Primary"`, `"Secondary"` or `"Danger"`. Buttons and toggles also accept `Description`.
+Most interactive controls return a handle. Use `:Get()` to read their value or `:Set(value)` to change it. Depending on the control, there are also methods like `:SetVisible(bool)`, `:SetDisabled(bool)` and `:Destroy()`.
 
-`CreateCollapsibleSection` returns `SetExpanded(bool)`, `GetExpanded()` and `Toggle()`. Controls created after it go inside that group until you add another section.
+A few options worth knowing:
 
-A progress handle supports `Set(value, animate)` and `SetLabel(text)`. Status rows support `Set(value, level)` with `success`, `error` or `info`.
+- Buttons accept `Variant="Primary"`, `"Secondary"` or `"Danger"`. Buttons and toggles can also have a `Description`.
+- Collapsible sections return `:SetExpanded(bool)`, `:GetExpanded()` and `:Toggle()`. Controls created afterward are placed in that section until you add another one.
+- Progress bars use `:Set(value, animate)`. Status rows use `:Set(value, level)`, where the level can be `success`, `error` or `info`.
+- Colour pickers start collapsed. Pass `Expanded=true` if you want the editor open immediately.
 
-## window stuff
+## Window methods
+
+The window can be resized, hidden, minimised or restyled after creation.
 
 ```lua
 win:SetSize(640, 440)
 win:SetTheme("Monochrome")
 win:SetRain(false)
-win:Notify("loaded", "OK")
+win:SetHidden(false)
 
--- search all tabs/controls, or press Ctrl+K
-win:OpenSearch("speed")
-
-win:Confirm({
-    Title = "Delete profile?",
-    Content = "This can't be undone.",
-    Danger = true,
-    OnConfirm = function()
-        print("confirmed")
-    end,
-})
-
-local stats = win:GetDiagnostics()
-print(stats.counts.controls, stats.counts.controlEvents)
+win:Notify("Loaded", "OK")
 ```
 
-The header search button works on touch too. Search matches tab names and registered control labels, then jumps to the matching control. `Escape` closes search/dialogs on keyboard.
+There is a search button in the header. You can also press **Ctrl+K**, or open it through code:
 
-Other window methods: `SetAccentColor`, `SetBorderThickness`, `SetHidden`, `SetMinimized`, `SelectTab`, `Toast` and `Destroy`.
+```lua
+win:OpenSearch("speed")
+```
 
-### icon
+Search looks through tab names and registered controls. Selecting a result switches to the right tab and scrolls to it.
 
-The fish PNG is in [`assets/reefFish-icon.png`](assets/reefFish-icon.png). That file is the source image, not a Roblox asset.
+For actions that need confirmation:
 
-Upload it to Roblox first, then use its **image asset ID**:
+```lua
+win:Confirm({
+    Title = "Delete profile?",
+    Content = "This cannot be undone.",
+    Danger = true,
+    OnConfirm = function()
+        print("Confirmed")
+    end,
+})
+```
+
+`win:GetDiagnostics()` returns basic UI information such as the number of tabs, controls and event connections. It does not run a background profiler.
+
+Other methods include `SetAccentColor`, `SetBorderThickness`, `SetMinimized`, `SelectTab`, `Toast` and `Destroy`.
+
+## Icon
+
+The fish icon is in [`assets/reefFish-icon.png`](assets/reefFish-icon.png).
+
+Roblox won't load a GitHub PNG directly into an `ImageLabel`. Upload the image through Roblox first, then pass its Roblox image asset ID:
 
 ```lua
 local win = ReefFish:CreateWindow({
-    Title = "my hub",
+    Title = "My Hub",
     Icon = "rbxassetid://YOUR_IMAGE_ASSET_ID",
 })
-
--- or set the ID later
-win:SetIcon("rbxassetid://YOUR_IMAGE_ASSET_ID")
 ```
 
-You can also set `ReefFish.DefaultIconAsset` before creating the window, or pass an `Icon` to a tab. The old dot placeholder is gone. No asset ID is hardcoded.
+You can also call `win:SetIcon(assetId)`, set `ReefFish.DefaultIconAsset` before making a window, or use `Icon` on individual tabs. No ID is included by default.
 
-## configs
+## Profiles
 
-Only controls with a `Flag` are saved.
+Only controls with a `Flag` are saved. Game profiles and appearance profiles are separate.
 
 ```lua
 win.Config:Save("default")
 win.Config:Load("default")
-win.Config:Load("default", {FireCallbacks=true}) -- opt-in
+
+-- Normally, loading a profile does not call your callbacks.
+win.Config:Load("default", {FireCallbacks=true})
 
 local json = win.Config:Export()
 win.Config:Import(json)
@@ -150,31 +178,23 @@ win.Appearance:Save("dark")
 win.Appearance:Load("dark")
 ```
 
-Game profiles are separated by `game.GameId`. Appearance profiles are stored separately. JSON is values only; importing a profile doesn't execute Lua. Loading doesn't fire your callbacks unless you explicitly ask it to.
+Game profiles are separated by `game.GameId`. If compatible file APIs are available, files are stored under `reefFishUI/games/<game.GameId>/` and `reefFishUI/appearance/`.
 
-If the environment has compatible file APIs, profiles go under:
+Without file APIs, profiles only last for the current session. Check `win.StorageMode` to see whether it's using `"file"` or `"memory"`.
 
-```text
-reefFishUI/
-  appearance/
-  games/<game.GameId>/
-```
+Imported profiles are JSON values, not executable Lua.
 
-Otherwise it's in-memory for the current session. Check `win.StorageMode` to see which is active.
+## Notes
 
-## notes
+- Default size is 600×420. Smaller windows use horizontal tabs.
+- Matrix rain is optional and only creates its glyph objects when enabled.
+- Dropdowns reuse visible option rows rather than creating hundreds at once.
+- The profile format is still schema v1. Old pinned builds are left alone.
+- `src/reefFish.luau` is the editable source; `dist/reefFish.lua` is the current release.
+- The example covers the newer controls, resizing and a few cleanup checks. Mobile controls, repeated loading and popup behaviour still need more live testing.
 
-- Default window is 600×420. It resizes, clamps to the viewport and uses horizontal tabs when narrow.
-- Matrix rain is optional. It doesn't create its glyph labels until enabled.
-- Dropdowns reuse visible rows instead of spawning every option.
-- Existing profile format is still schema v1. The main distribution path stays `dist/reefFish.lua`.
-- Studio demo: `examples/basic.luau`. It covers the newer components, resizing and some cleanup checks.
-- Needs more real client testing, especially mobile input, modal/search layering and repeated open/close. A static check isn't a playtest.
+If something breaks, include the client, game/place, steps to reproduce and the first console error. That makes it much easier to track down.
 
-Bug reports are more useful with the client, game/place, steps to reproduce and the first error in the console.
+## License
 
-## license
-
-MIT. See [LICENSE](LICENSE).
-
-Release history is in [CHANGELOG.md](CHANGELOG.md).
+MIT. See [LICENSE](LICENSE). Previous changes are listed in [CHANGELOG.md](CHANGELOG.md).
