@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0-alpha — Search, dialogs, developer controls and fish branding
+
+- Add the user-provided fish logo as `assets/reefFish-icon.png` and replace the title-bar placeholder with optional Roblox ImageLabel support (asset ID required for in-game display).
+- Allow `CreateTab({Icon=assetId})` and `tab:SetIcon(assetId)`.
+- Add cross-tab search with header button, `Ctrl+K` shortcut, result navigation and collapsed-group revealing.
+- Add confirmation dialogs and use them for profile deletion.
+- Add opt-in collapsible sections, progress bars and semantic status rows.
+- Add `GetDiagnostics()` for low-overhead, read-only UI health and event counts.
+- Preserve existing controls, theme APIs and profile persistence, and keep the permanent distribution URL unchanged.
+- Static validation is complete only after source and dist are synced; Roblox Studio/runtime testing still required.
+
 ## 0.4.4-alpha — Crash mitigation
 
 - Avoid nesting section-group `AutomaticSize.Y` within scrolling-frame automatic canvas sizing. A measured `UIListLayout.AbsoluteContentSize` now controls group height only when it changes.
