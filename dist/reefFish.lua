@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.4.3-alpha
+-- reefFish UI Lib v0.4.4-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.3-alpha"}
+local Lib={Version="0.4.4-alpha"}
 -- Foundation tokens: neutral surfaces and a separate optional accent/rain layer.
 local Design={
  space={xs=4,sm=8,md=12,lg=16,xl=20},
@@ -269,6 +269,9 @@ function Window:SetRain(enabled,density,speed)
  if type(density)=="number" then self.rainDensity=math.clamp(density,0,1) end
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
  if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
+ if self.rainEnabled and self._ensureRainColumns then
+  self._ensureRainColumns(self.width)
+ end
  self:_refreshChrome()
  if self._rainColumns and self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
@@ -426,7 +429,7 @@ function Window:_layout()
   self._toastLayer.Size=UDim2.fromOffset(toastWidth,toastHeight)
   self._toastLayer.Position=UDim2.new(1,-toastWidth-10,1,-toastHeight-12)
  end
- if self._ensureRainColumns then self._ensureRainColumns(self.width) end
+ if self.rainEnabled and self._ensureRainColumns then self._ensureRainColumns(self.width) end
  self:_clampPosition()
 end
 function Window:SetSize(width,height)
@@ -587,8 +590,10 @@ function Tab:CreateSection(name)
  },f)
  w:_theme(label,"TextColor3","muted")
  self._layoutOrder+=1
+ -- Explicit height avoids nested AutomaticSize layout feedback with
+ -- ScrollingFrame.AutomaticCanvasSize on some Roblox client builds.
  local group=make("Frame",{
-  Size=UDim2.new(1,-4,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+  Size=UDim2.new(1,-4,0,8),AutomaticSize=Enum.AutomaticSize.None,
   BackgroundTransparency=0,BorderSizePixel=0,LayoutOrder=self._layoutOrder
  },self.page)
  round(group,Design.radius.surface)
@@ -599,7 +604,18 @@ function Tab:CreateSection(name)
   PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),
   PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,4)
  },group)
- make("UIListLayout",{Padding=UDim.new(0,0),SortOrder=Enum.SortOrder.LayoutOrder},group)
+ local groupLayout=make("UIListLayout",{
+  Padding=UDim.new(0,0),SortOrder=Enum.SortOrder.LayoutOrder
+ },group)
+ local function updateGroupHeight()
+  if not group.Parent then return end
+  local required=math.max(8,math.ceil(groupLayout.AbsoluteContentSize.Y)+8)
+  if group.Size.Y.Offset~=required then
+   group.Size=UDim2.new(1,-4,0,required)
+  end
+ end
+ w:_connectControl(group,groupLayout:GetPropertyChangedSignal("AbsoluteContentSize"),updateGroupHeight)
+ task.defer(updateGroupHeight)
  self._group=group
  self._groupOrder=0
  return f
@@ -2157,7 +2173,7 @@ function Lib:CreateWindow(o)
   fieldPeriod=count*spacing
  end
  w._ensureRainColumns=ensureRainColumns
- ensureRainColumns(w.width)
+ if w.rainEnabled then ensureRainColumns(w.width) end
  w._rainColumns=streams
  w._repaintRain=function()
   for _,stream in ipairs(streams) do updateText(stream) end
