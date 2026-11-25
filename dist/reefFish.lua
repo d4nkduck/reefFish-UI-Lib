@@ -1,17 +1,55 @@
--- reefFish UI Lib v0.4.2-alpha
+-- reefFish UI Lib v0.4.3-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.2-alpha"}
+local Lib={Version="0.4.3-alpha"}
+-- Foundation tokens: neutral surfaces and a separate optional accent/rain layer.
+local Design={
+ space={xs=4,sm=8,md=12,lg=16,xl=20},
+ radius={small=5,control=7,surface=10,window=13},
+ type={caption=10,label=12,body=13,section=11,title=17},
+ height={header=52,footer=25,button=40,toggle=44,slider=60,dropdown=70,input=68}
+}
+Lib.Design=Design
 local palettes={
- MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
- ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
- AmberTerminal={bg=Color3.fromRGB(23,18,11),panel=Color3.fromRGB(35,27,17),raised=Color3.fromRGB(48,35,20),border=Color3.fromRGB(214,156,48),ink=Color3.fromRGB(83,54,9),accent=Color3.fromRGB(255,214,138),text=Color3.fromRGB(240,226,202),muted=Color3.fromRGB(170,148,110)},
- IceConsole={bg=Color3.fromRGB(11,18,24),panel=Color3.fromRGB(15,27,35),raised=Color3.fromRGB(24,42,52),border=Color3.fromRGB(70,159,201),ink=Color3.fromRGB(22,60,80),accent=Color3.fromRGB(140,229,255),text=Color3.fromRGB(214,231,238),muted=Color3.fromRGB(130,164,176)},
- Monochrome={bg=Color3.fromRGB(17,17,17),panel=Color3.fromRGB(26,26,26),raised=Color3.fromRGB(39,39,39),border=Color3.fromRGB(148,148,148),ink=Color3.fromRGB(51,51,51),accent=Color3.fromRGB(240,240,240),text=Color3.fromRGB(220,220,220),muted=Color3.fromRGB(159,159,159)}
+ MatrixInverse={
+  bg=Color3.fromRGB(13,17,21),panel=Color3.fromRGB(22,28,33),
+  raised=Color3.fromRGB(31,39,45),stroke=Color3.fromRGB(49,61,68),
+  border=Color3.fromRGB(31,179,111),ink=Color3.fromRGB(8,62,40),
+  accent=Color3.fromRGB(115,224,162),text=Color3.fromRGB(231,238,240),
+  muted=Color3.fromRGB(148,166,171),danger=Color3.fromRGB(235,132,126)
+ },
+ ClassicCRT={
+  bg=Color3.fromRGB(12,18,15),panel=Color3.fromRGB(20,29,23),
+  raised=Color3.fromRGB(28,42,32),stroke=Color3.fromRGB(48,68,53),
+  border=Color3.fromRGB(26,151,83),ink=Color3.fromRGB(9,55,29),
+  accent=Color3.fromRGB(111,224,147),text=Color3.fromRGB(228,240,230),
+  muted=Color3.fromRGB(147,173,151),danger=Color3.fromRGB(235,132,126)
+ },
+ AmberTerminal={
+  bg=Color3.fromRGB(21,19,17),panel=Color3.fromRGB(32,28,24),
+  raised=Color3.fromRGB(43,38,31),stroke=Color3.fromRGB(73,60,43),
+  border=Color3.fromRGB(198,144,61),ink=Color3.fromRGB(80,54,20),
+  accent=Color3.fromRGB(238,190,114),text=Color3.fromRGB(242,234,220),
+  muted=Color3.fromRGB(175,157,131),danger=Color3.fromRGB(235,132,126)
+ },
+ IceConsole={
+  bg=Color3.fromRGB(13,19,25),panel=Color3.fromRGB(20,29,38),
+  raised=Color3.fromRGB(29,42,53),stroke=Color3.fromRGB(50,69,82),
+  border=Color3.fromRGB(62,149,196),ink=Color3.fromRGB(23,58,80),
+  accent=Color3.fromRGB(145,214,242),text=Color3.fromRGB(230,238,244),
+  muted=Color3.fromRGB(152,175,187),danger=Color3.fromRGB(235,132,126)
+ },
+ Monochrome={
+  bg=Color3.fromRGB(17,18,20),panel=Color3.fromRGB(27,29,32),
+  raised=Color3.fromRGB(39,42,46),stroke=Color3.fromRGB(65,70,76),
+  border=Color3.fromRGB(150,155,161),ink=Color3.fromRGB(51,55,60),
+  accent=Color3.fromRGB(236,238,241),text=Color3.fromRGB(232,233,236),
+  muted=Color3.fromRGB(163,169,176),danger=Color3.fromRGB(235,132,126)
+ }
 }
 Lib.Themes=palettes
 local function make(class,props,parent)
@@ -20,7 +58,7 @@ local function make(class,props,parent)
  x.Parent=parent
  return x
 end
-local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 6)},x) end
+local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or Design.radius.control)},x) end
 local function fire(fn,...)
  if type(fn)=="function" then local ok,err=pcall(fn,...) if not ok then warn("[reefFish]",err) end end
 end
@@ -96,21 +134,27 @@ local Tab={} Tab.__index=Tab
 function Window:_feedback(hitbox,surface,baseToken)
  local state="normal"
  local currentTween
+ local transparentIdle=surface.BackgroundTransparency>.95
  local function refresh(animate)
   if not surface.Parent then return end
   local base=self.colors[baseToken or "panel"] or self.colors.panel
   local target=base
+  local highlight=(baseToken=="accent" or baseToken=="danger") and self.colors.text or self.colors.accent
   if state=="hover" then
-   target=base:Lerp(self.colors.accent,.08)
+   target=base:Lerp(highlight,(baseToken=="accent" or baseToken=="danger") and .13 or .055)
   elseif state=="pressed" then
-   target=base:Lerp(self.colors.accent,.16)
+   target=base:Lerp(highlight,(baseToken=="accent" or baseToken=="danger") and .22 or .12)
   end
   if currentTween then currentTween:Cancel() currentTween=nil end
+  local transparency=transparentIdle and (state=="normal" and 1 or (state=="pressed" and .58 or .75)) or 0
   if animate then
-   currentTween=TweenService:Create(surface,TweenInfo.new(.12,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=target})
+   currentTween=TweenService:Create(surface,TweenInfo.new(.14,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+    BackgroundColor3=target,BackgroundTransparency=transparency
+   })
    currentTween:Play()
   else
    surface.BackgroundColor3=target
+   surface.BackgroundTransparency=transparency
   end
  end
  self:_trackFeedback(surface,function()refresh(false)end)
@@ -184,6 +228,11 @@ function Window:_theme(obj,property,token)
  end
  obj[property]=self.colors[token]
 end
+function Window:_refreshChrome()
+ if self.root and self.root.Parent then
+  self.root.BackgroundColor3=self.rainEnabled and self.colors.border or self.colors.stroke
+ end
+end
 function Window:SetTheme(name)
  if not palettes[name] then return false end
  if self._closeDropdown then self._closeDropdown() end
@@ -194,6 +243,7 @@ function Window:SetTheme(name)
   else table.remove(self._bound,i) end
  end
  self:_refreshFeedback()
+ self:_refreshChrome()
  if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
@@ -219,6 +269,7 @@ function Window:SetRain(enabled,density,speed)
  if type(density)=="number" then self.rainDensity=math.clamp(density,0,1) end
  if type(speed)=="number" then self.rainSpeed=math.clamp(speed,0,1) end
  if self._rainLayer then self._rainLayer.Visible=self.rainEnabled end
+ self:_refreshChrome()
  if self._rainColumns and self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
 end
@@ -237,25 +288,36 @@ function Window:Toast(info)
   Size=UDim2.new(1,0,0,58),BackgroundColor3=self.colors.panel,
   BackgroundTransparency=1,BorderSizePixel=0,ZIndex=180
  },self._toastLayer)
- round(frame,6)
- make("UIStroke",{Color=self.colors.muted,Thickness=1,Transparency=.65},frame)
+ round(frame,Design.radius.surface)
+ self:_theme(frame,"BackgroundColor3","panel")
+ local toastStroke=make("UIStroke",{Thickness=1,Transparency=.5},frame)
+ self:_theme(toastStroke,"Color","stroke")
+ local accentBar=make("Frame",{
+  Position=UDim2.fromOffset(0,11),Size=UDim2.fromOffset(3,36),
+  BorderSizePixel=0,ZIndex=181
+ },frame)
+ round(accentBar,2)
+ self:_theme(accentBar,"BackgroundColor3","accent")
  local heading=make("TextLabel",{
-  Text=title,TextColor3=self.colors.accent,BackgroundTransparency=1,
-  Position=UDim2.fromOffset(8,3),Size=UDim2.new(1,-26,0,22),
-  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=12,
+  Text=title,TextColor3=self.colors.text,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(14,4),Size=UDim2.new(1,-42,0,22),
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=Design.type.label,
   TextTransparency=1,ZIndex=181
  },frame)
  local body=make("TextLabel",{
-  Text=content,TextColor3=self.colors.text,BackgroundTransparency=1,
-  Position=UDim2.fromOffset(8,23),Size=UDim2.new(1,-16,0,31),
+  Text=content,TextColor3=self.colors.muted,BackgroundTransparency=1,
+  Position=UDim2.fromOffset(14,24),Size=UDim2.new(1,-28,0,31),
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
-  TextWrapped=true,Font=Enum.Font.Gotham,TextSize=11,TextTransparency=1,ZIndex=181
+  TextWrapped=true,Font=Enum.Font.Gotham,TextSize=Design.type.caption,TextTransparency=1,ZIndex=181
  },frame)
  local close=make("TextButton",{
   Text="×",TextColor3=self.colors.muted,BackgroundTransparency=1,
   Position=UDim2.new(1,-25,0,1),Size=UDim2.fromOffset(23,22),
   Font=Enum.Font.Gotham,TextSize=18,ZIndex=182
  },frame)
+ self:_theme(heading,"TextColor3","text")
+ self:_theme(body,"TextColor3","muted")
+ self:_theme(close,"TextColor3","muted")
  table.insert(self._toasts,frame)
  local function dismiss()
   if not frame.Parent then return end
@@ -310,7 +372,7 @@ function Window:_layout()
  -- Preserve intended dimensions when the viewport temporarily gets smaller.
  self.width=math.clamp(self.requestedWidth,math.min(330,maxWidth),maxWidth)
  self.height=math.clamp(self.requestedHeight,math.min(250,maxHeight),maxHeight)
- local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
+ local shownHeight=self.minimized and (Design.height.header+self.borderThickness*2) or self.height
  self.root.Size=UDim2.fromOffset(self.width,shownHeight)
  if self.nav and self.content then
   local compact=self.width<420
@@ -318,23 +380,33 @@ function Window:_layout()
   if compact then
    -- Mobile: horizontal, scrollable tab rail rather than a narrow sidebar.
    self.nav.Position=UDim2.fromOffset(0,0)
-   self.nav.Size=UDim2.new(1,0,0,42)
+   self.nav.Size=UDim2.new(1,0,0,46)
    self.nav.ScrollingDirection=Enum.ScrollingDirection.X
    self.nav.AutomaticCanvasSize=Enum.AutomaticSize.X
    if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Horizontal end
-   self.content.Position=UDim2.fromOffset(0,43)
-   self.content.Size=UDim2.new(1,0,1,-43)
+   if self._navPadding then
+    self._navPadding.PaddingTop=UDim.new(0,5)
+    self._navPadding.PaddingBottom=UDim.new(0,4)
+    self._navPadding.PaddingLeft=UDim.new(0,8)
+   end
+   self.content.Position=UDim2.fromOffset(0,47)
+   self.content.Size=UDim2.new(1,0,1,-47)
    if self._navDivider then
-    self._navDivider.Position=UDim2.fromOffset(0,42)
+    self._navDivider.Position=UDim2.fromOffset(0,46)
     self._navDivider.Size=UDim2.new(1,0,0,1)
    end
   else
-   local navWidth=math.clamp(math.floor(self.width*.26),105,155)
+   local navWidth=math.clamp(math.floor(self.width*.245),118,162)
    self.nav.Position=UDim2.fromOffset(0,0)
    self.nav.Size=UDim2.new(0,navWidth,1,0)
    self.nav.ScrollingDirection=Enum.ScrollingDirection.Y
    self.nav.AutomaticCanvasSize=Enum.AutomaticSize.Y
    if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Vertical end
+   if self._navPadding then
+    self._navPadding.PaddingTop=UDim.new(0,12)
+    self._navPadding.PaddingBottom=UDim.new(0,8)
+    self._navPadding.PaddingLeft=UDim.new(0,8)
+   end
    self.content.Position=UDim2.fromOffset(navWidth+3,0)
    self.content.Size=UDim2.new(1,-navWidth-3,1,0)
    if self._navDivider then
@@ -343,7 +415,7 @@ function Window:_layout()
    end
   end
   for _,tab in ipairs(self.tabs) do
-   tab.button.Size=compact and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32)
+   tab.button.Size=compact and UDim2.fromOffset(124,36) or UDim2.new(1,-10,0,36)
   end
  end
  if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
@@ -383,7 +455,8 @@ function Window:SelectTab(tab)
   local selected=t==tab
   t.page.Visible=selected
   t.button.BackgroundColor3=selected and self.colors.raised or self.colors.bg
-  t.button.TextColor3=selected and self.colors.accent or self.colors.muted
+  t.button.TextColor3=selected and self.colors.text or self.colors.muted
+  t.button.Font=selected and Enum.Font.GothamBold or Enum.Font.GothamMedium
   if t.indicator then t.indicator.Visible=selected end
  end
  self.active=tab
@@ -427,14 +500,14 @@ function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
   Text="  "..tostring(name),LayoutOrder=#self.tabs+1,
-  Size=self._compactNav and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32),
-  Font=Enum.Font.GothamMedium,TextSize=12,
+  Size=self._compactNav and UDim2.fromOffset(124,36) or UDim2.new(1,-10,0,36),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
  },self.nav)
- round(button,5)
+ round(button,Design.radius.control)
  local indicator=make("Frame",{
-  Position=UDim2.fromOffset(0,7),Size=UDim2.fromOffset(2,18),
+  Position=UDim2.fromOffset(0,8),Size=UDim2.fromOffset(3,20),
   BorderSizePixel=0,Visible=false,Active=false
  },button)
  round(indicator,2)
@@ -446,49 +519,99 @@ function Window:CreateTab(opts)
   Visible=false,BorderSizePixel=0
  },self.content)
  make("UIPadding",{
-  PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),
-  PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)
+  PaddingTop=UDim.new(0,Design.space.md),PaddingBottom=UDim.new(0,Design.space.lg),
+  PaddingLeft=UDim.new(0,Design.space.md),PaddingRight=UDim.new(0,Design.space.md)
  },page)
- make("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder},page)
+ make("UIListLayout",{Padding=UDim.new(0,Design.space.sm),SortOrder=Enum.SortOrder.LayoutOrder},page)
  local t=setmetatable({window=self,button=button,page=page,indicator=indicator},Tab)
  self:_theme(button,"TextColor3","muted")
  self:_theme(button,"BackgroundColor3","bg")
  self.tabs[#self.tabs+1]=t
  self._connections[#self._connections+1]=button.MouseButton1Click:Connect(function()self:SelectTab(t)end)
  self._connections[#self._connections+1]=button.MouseEnter:Connect(function()
-  if self.active~=t then button.BackgroundColor3=self.colors.panel end
+  if self.active~=t then
+   TweenService:Create(button,TweenInfo.new(.13),{BackgroundColor3=self.colors.panel}):Play()
+  end
  end)
  self._connections[#self._connections+1]=button.MouseLeave:Connect(function()
-  if self.active~=t then button.BackgroundColor3=self.colors.bg end
+  if self.active~=t then
+   TweenService:Create(button,TweenInfo.new(.13),{BackgroundColor3=self.colors.bg}):Play()
+  end
  end)
  if #self.tabs==1 then self:SelectTab(t) end
  return t
 end
 function Tab:_base(height)
  local w=self.window
- local frame=make("Frame",{Size=UDim2.new(1,-4,0,height),BorderSizePixel=0},self.page)
- round(frame,6)
- w:_theme(frame,"BackgroundColor3","panel")
+ local grouped=self._group~=nil and self._group.Parent~=nil
+ local order
+ if grouped then
+  self._groupOrder=(self._groupOrder or 0)+1
+  order=self._groupOrder
+ else
+  self._layoutOrder=(self._layoutOrder or 0)+1
+  order=self._layoutOrder
+ end
+ local frame=make("Frame",{
+  Size=UDim2.new(1,grouped and 0 or -4,0,height),
+  BackgroundTransparency=grouped and 1 or 0,
+  BorderSizePixel=0,LayoutOrder=order
+ },grouped and self._group or self.page)
+ if not grouped then
+  round(frame,Design.radius.surface)
+  w:_theme(frame,"BackgroundColor3","panel")
+  local edge=make("UIStroke",{Thickness=1,Transparency=.65},frame)
+  w:_theme(edge,"Color","stroke")
+ else
+  -- A single section surface holds related settings, with quiet row separators.
+  local separator=make("Frame",{
+   Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),
+   BorderSizePixel=0,BackgroundTransparency=.68,Active=false
+  },frame)
+  w:_theme(separator,"BackgroundColor3","stroke")
+ end
  return frame
 end
 function Tab:CreateSection(name)
- -- Sections are quiet dividers, not another raised card.
+ local w=self.window
+ self._layoutOrder=(self._layoutOrder or 0)+1
  local f=make("Frame",{
-  Size=UDim2.new(1,-4,0,27),BackgroundTransparency=1,BorderSizePixel=0
+  Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1,
+  BorderSizePixel=0,LayoutOrder=self._layoutOrder
  },self.page)
- local l=make("TextLabel",{
-  BackgroundTransparency=1,Size=UDim2.new(1,-12,1,0),
-  Position=UDim2.fromOffset(4,0),Text=tostring(name),
-  Font=Enum.Font.GothamBold,TextSize=11,
+ local label=make("TextLabel",{
+  BackgroundTransparency=1,Size=UDim2.new(1,-18,1,0),
+  Position=UDim2.fromOffset(7,0),Text=tostring(name),
+  Font=Enum.Font.GothamBold,TextSize=Design.type.section,
   TextXAlignment=Enum.TextXAlignment.Left
  },f)
- self.window:_theme(l,"TextColor3","muted")
+ w:_theme(label,"TextColor3","muted")
+ self._layoutOrder+=1
+ local group=make("Frame",{
+  Size=UDim2.new(1,-4,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+  BackgroundTransparency=0,BorderSizePixel=0,LayoutOrder=self._layoutOrder
+ },self.page)
+ round(group,Design.radius.surface)
+ w:_theme(group,"BackgroundColor3","panel")
+ local border=make("UIStroke",{Thickness=1,Transparency=.62},group)
+ w:_theme(border,"Color","stroke")
+ make("UIPadding",{
+  PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8),
+  PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,4)
+ },group)
+ make("UIListLayout",{Padding=UDim.new(0,0),SortOrder=Enum.SortOrder.LayoutOrder},group)
+ self._group=group
+ self._groupOrder=0
  return f
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
  local f=self:_base(32)
- local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,TextSize=12,TextWrapped=true},f)
+ local l=make("TextLabel",{
+  BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),
+  Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.Gotham,TextSize=Design.type.body,TextWrapped=true
+ },f)
  self.window:_theme(l,"TextColor3","text")
  return {
   SetText=function(_,v)l.Text=tostring(v)end,
@@ -500,27 +623,54 @@ end
 function Tab:CreateButton(o)
  o=o or {}
  local w=self.window
- local f=self:_base(35)
+ local hasDescription=type(o.Description)=="string" and o.Description~=""
+ local f=self:_base(hasDescription and 59 or Design.height.button)
+ local variant=string.lower(tostring(o.Variant or o.Style or "secondary"))
+ if variant~="primary" and variant~="danger" then variant="secondary" end
+ local colored=variant~="secondary"
+ if colored then
+  f.BackgroundTransparency=0
+  round(f,Design.radius.control)
+  w:_theme(f,"BackgroundColor3",variant=="primary" and "accent" or "danger")
+ end
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
-  Text="  "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
-  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Text="",BorderSizePixel=0
  },f)
+ local name=make("TextLabel",{
+  Text=tostring(o.Name or "Button"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-60,0,24),Position=UDim2.fromOffset(13,hasDescription and 7 or 8),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ local detail
+ if hasDescription then
+  detail=make("TextLabel",{
+   Text=o.Description,BackgroundTransparency=1,
+   Size=UDim2.new(1,-65,0,19),Position=UDim2.fromOffset(13,30),
+   Font=Enum.Font.Gotham,TextSize=Design.type.caption,
+   TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+  },f)
+ end
  local arrow=make("TextLabel",{
-  Text="›",BackgroundTransparency=1,
-  Size=UDim2.fromOffset(18,30),Position=UDim2.new(1,-26,0,2),
-  Font=Enum.Font.Gotham,TextSize=20
+  Text="→",BackgroundTransparency=1,
+  Size=UDim2.fromOffset(19,28),Position=UDim2.new(1,-31,.5,-14),
+  Font=Enum.Font.GothamMedium,TextSize=17
  },f)
- w:_theme(b,"TextColor3","text")
- w:_theme(arrow,"TextColor3","muted")
- w:_feedback(b,f)
+ w:_theme(name,"TextColor3",colored and "bg" or "text")
+ w:_theme(arrow,"TextColor3",colored and "bg" or "muted")
+ if detail then w:_theme(detail,"TextColor3",colored and "bg" or "muted") end
+ w:_feedback(b,f,colored and variant=="danger" and "danger" or (colored and "accent" or "panel"))
  local disabled=false
- w:_connectControl(f,b.MouseButton1Click,function()if not disabled then fire(o.Callback)end end)
+ w:_connectControl(f,b.MouseButton1Click,function()
+  if not disabled then fire(o.Callback) end
+ end)
  return {
   SetDisabled=function(_,v)
    disabled=v==true
-   b.TextTransparency=disabled and .55 or 0
+   name.TextTransparency=disabled and .55 or 0
    arrow.TextTransparency=disabled and .55 or 0
+   if detail then detail.TextTransparency=disabled and .6 or 0 end
   end,
   SetVisible=function(_,v)f.Visible=v~=false end,
   Destroy=function()f:Destroy()end
@@ -529,33 +679,50 @@ end
 function Tab:CreateToggle(o)
  o=o or {}
  local w=self.window
- local f=self:_base(39)
+ local hasDescription=type(o.Description)=="string" and o.Description~=""
+ local f=self:_base(hasDescription and 62 or Design.height.toggle)
  local value=o.Default==true
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
-  Text="  "..tostring(o.Name or "Toggle"),Font=Enum.Font.GothamMedium,
-  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Text="",BorderSizePixel=0
  },f)
- w:_theme(b,"TextColor3","text")
+ local name=make("TextLabel",{
+  Text=tostring(o.Name or "Toggle"),BackgroundTransparency=1,
+  Position=UDim2.fromOffset(13,hasDescription and 8 or 10),
+  Size=UDim2.new(1,-82,0,25),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ w:_theme(name,"TextColor3","text")
+ local detail
+ if hasDescription then
+  detail=make("TextLabel",{
+   Text=o.Description,BackgroundTransparency=1,
+   Position=UDim2.fromOffset(13,34),Size=UDim2.new(1,-85,0,18),
+   Font=Enum.Font.Gotham,TextSize=Design.type.caption,
+   TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+  },f)
+  w:_theme(detail,"TextColor3","muted")
+ end
  local track=make("Frame",{
-  Size=UDim2.fromOffset(34,19),Position=UDim2.new(1,-45,.5,-9),
+  Size=UDim2.fromOffset(40,22),Position=UDim2.new(1,-54,.5,-11),
   BorderSizePixel=0,BackgroundColor3=w.colors.raised,Active=false
  },f)
- round(track,10)
+ round(track,11)
  local knob=make("Frame",{
-  Size=UDim2.fromOffset(13,13),Position=UDim2.fromOffset(3,3),
+  Size=UDim2.fromOffset(16,16),Position=UDim2.fromOffset(3,3),
   BorderSizePixel=0,BackgroundColor3=w.colors.muted,Active=false
  },track)
- round(knob,7)
+ round(knob,8)
  w:_feedback(b,f)
  local disabled=false
  local function render(animate)
   local targetColor=value and w.colors.accent or w.colors.raised
   local knobColor=value and w.colors.bg or w.colors.muted
-  local targetPosition=UDim2.fromOffset(value and 18 or 3,3)
+  local targetPosition=UDim2.fromOffset(value and 21 or 3,3)
   if animate then
-   TweenService:Create(track,TweenInfo.new(.15),{BackgroundColor3=targetColor}):Play()
-   TweenService:Create(knob,TweenInfo.new(.15),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
+   TweenService:Create(track,TweenInfo.new(.16),{BackgroundColor3=targetColor}):Play()
+   TweenService:Create(knob,TweenInfo.new(.16),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
   else
    track.BackgroundColor3=targetColor
    knob.Position=targetPosition
@@ -566,7 +733,8 @@ function Tab:CreateToggle(o)
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
-  b.TextTransparency=disabled and .55 or 0
+  name.TextTransparency=disabled and .55 or 0
+  if detail then detail.TextTransparency=disabled and .55 or 0 end
   track.BackgroundTransparency=disabled and .45 or 0
  end
  function handle:SetVisible(v)f.Visible=v~=false end
@@ -592,25 +760,25 @@ end
 function Tab:CreateSlider(o)
  o=o or {}
  local w=self.window
- local f=self:_base(54)
+ local f=self:_base(Design.height.slider)
  local min,max=tonumber(o.Min) or 0,tonumber(o.Max) or 100
  if max<=min then max=min+1 end
  local inc=math.max(tonumber(o.Increment) or 1,0.000001)
  local value=math.clamp(tonumber(o.Default) or min,min,max)
  local label=make("TextLabel",{
   Text=tostring(o.Name or "Slider"),BackgroundTransparency=1,
-  Size=UDim2.new(1,-98,0,26),Position=UDim2.fromOffset(10,2),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Size=UDim2.new(1,-98,0,26),Position=UDim2.fromOffset(11,4),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left
  },f)
  w:_theme(label,"TextColor3","text")
  local valueLabel=make("TextLabel",{
   BackgroundTransparency=1,Size=UDim2.fromOffset(77,26),
-  Position=UDim2.new(1,-87,0,2),Font=Enum.Font.GothamMedium,
-  TextSize=12,TextXAlignment=Enum.TextXAlignment.Right
+  Position=UDim2.new(1,-87,0,4),Font=Enum.Font.GothamMedium,
+  TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Right
  },f)
- w:_theme(valueLabel,"TextColor3","accent")
+ w:_theme(valueLabel,"TextColor3","muted")
  local bar=make("TextButton",{
-  Size=UDim2.new(1,-22,0,18),Position=UDim2.fromOffset(11,30),
+  Size=UDim2.new(1,-24,0,18),Position=UDim2.fromOffset(12,36),
   BackgroundTransparency=1,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
  local track=make("Frame",{
@@ -693,7 +861,7 @@ function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
  local w=self.window
- local f=self:_base(66)
+ local f=self:_base(Design.height.dropdown)
 
  local opts=o.Options or {}
  local multi=o.Multi==true
@@ -708,20 +876,26 @@ function Tab:CreateDropdown(o)
  else
   value=table.find(opts,o.Default) and o.Default or opts[1]
  end
- local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
- w:_theme(lab,"TextColor3","text")
+ local lab=make("TextLabel",{
+  Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(11,2),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ w:_theme(lab,"TextColor3","muted")
  local b=make("TextButton",{
-  Size=UDim2.new(1,-20,0,30),Position=UDim2.fromOffset(10,29),
-  Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  Size=UDim2.new(1,-22,0,32),Position=UDim2.fromOffset(11,29),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
   TextTruncate=Enum.TextTruncate.AtEnd,
   BorderSizePixel=0,AutoButtonColor=false
  },f)
- round(b,5)
+ round(b,Design.radius.control)
  w:_theme(b,"TextColor3","text")
  w:_theme(b,"BackgroundColor3","raised")
+ local fieldStroke=make("UIStroke",{Thickness=1,Transparency=.55},b)
+ w:_theme(fieldStroke,"Color","stroke")
  local chevron=make("TextLabel",{
   Text="⌄",BackgroundTransparency=1,Size=UDim2.fromOffset(18,28),
-  Position=UDim2.new(1,-34,0,30),Font=Enum.Font.GothamBold,TextSize=15
+  Position=UDim2.new(1,-37,0,32),Font=Enum.Font.GothamBold,TextSize=15
  },f)
  w:_theme(chevron,"TextColor3","muted")
  local handle={}
@@ -933,30 +1107,31 @@ end
 function Tab:CreateInput(o)
  o=o or {}
  local w=self.window
- local f=self:_base(63)
+ local f=self:_base(Design.height.input)
  local name=make("TextLabel",{
   Text=tostring(o.Name or "Input"),BackgroundTransparency=1,
-  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(10,0),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(11,2),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Left
  },f)
- w:_theme(name,"TextColor3","text")
+ w:_theme(name,"TextColor3","muted")
  local box=make("TextBox",{
   Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),
-  ClearTextOnFocus=false,Size=UDim2.new(1,-20,0,29),
-  Position=UDim2.fromOffset(10,28),Font=Enum.Font.Gotham,TextSize=12,
+  ClearTextOnFocus=false,Size=UDim2.new(1,-22,0,32),
+  Position=UDim2.fromOffset(11,29),Font=Enum.Font.Gotham,TextSize=Design.type.body,
   TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0
  },f)
- round(box,5)
+ round(box,Design.radius.control)
+ make("UIPadding",{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)},box)
  w:_theme(box,"TextColor3","text")
  w:_theme(box,"BackgroundColor3","raised")
  w:_theme(box,"PlaceholderColor3","muted")
- local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.5},box)
+ local outline=make("UIStroke",{Thickness=1,Color=w.colors.stroke,Transparency=.42},box)
  local disabled=false
  local lastCommitted=box.Text
  local function refreshOutline()
   if not box.Parent then return end
-  outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
-  outline.Transparency=box:IsFocused() and 0 or .5
+  outline.Color=box:IsFocused() and w.colors.accent or w.colors.stroke
+  outline.Transparency=box:IsFocused() and 0 or .42
  end
  w:_trackFeedback(f,refreshOutline)
  w:_connectControl(f,box.Focused,refreshOutline)
@@ -991,7 +1166,7 @@ function Tab:CreateInput(o)
   if disabled then return end
   if o.Numeric and tonumber(box.Text)==nil then
    box.Text=lastCommitted
-   outline.Color=Color3.fromRGB(240,120,120)
+   outline.Color=w.colors.danger
    outline.Transparency=0
    w:Notify("Enter a valid number for "..tostring(o.Name or "Input"),"WARN")
    return
@@ -1011,21 +1186,21 @@ function Tab:CreateParagraph(o)
  local heading=make("TextLabel",{
   Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.GothamBold,TextSize=12,Text=tostring(o.Title or "INFORMATION")
+  Font=Enum.Font.GothamBold,TextSize=Design.type.body,Text=tostring(o.Title or "INFORMATION")
  },f)
- w:_theme(heading,"TextColor3","accent")
+ w:_theme(heading,"TextColor3","text")
  local content=make("TextLabel",{
   Position=UDim2.fromOffset(10,30),
   Size=autoHeight and UDim2.new(1,-20,0,0) or UDim2.new(1,-20,1,-36),
   AutomaticSize=autoHeight and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
   TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
-  Font=Enum.Font.Gotham,TextSize=12,Text=tostring(o.Content or "")
+  Font=Enum.Font.Gotham,TextSize=Design.type.label,Text=tostring(o.Content or "")
  },f)
- w:_theme(content,"TextColor3","text")
+ w:_theme(content,"TextColor3","muted")
  local function updateHeight()
   if autoHeight and f.Parent then
-   f.Size=UDim2.new(1,-4,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
+   f.Size=UDim2.new(1,f.Parent==self.page and -4 or 0,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
   end
  end
  if autoHeight then
@@ -1055,27 +1230,29 @@ function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
  local expanded=o.Expanded==true
- local f=self:_base(expanded and 230 or 42)
+ local f=self:_base(expanded and 230 or Design.height.toggle)
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
  local heading=make("TextButton",{
-  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.GothamMedium,TextSize=12,AutoButtonColor=false,
+  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.GothamMedium,TextSize=Design.type.body,AutoButtonColor=false,
   TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
-  Position=UDim2.fromOffset(9,4),Size=UDim2.new(1,-82,0,22)
+  Position=UDim2.fromOffset(11,6),Size=UDim2.new(1,-85,0,28)
  },f)
  w:_theme(heading,"TextColor3","text")
  local swatch=make("TextButton",{
-  Position=UDim2.new(1,-43,0,7),Size=UDim2.fromOffset(30,18),
+  Position=UDim2.new(1,-43,0,10),Size=UDim2.fromOffset(28,23),
   BackgroundColor3=initial,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
- round(swatch,3)
+ round(swatch,Design.radius.small)
+ local swatchOutline=make("UIStroke",{Thickness=1,Transparency=.4},swatch)
+ w:_theme(swatchOutline,"Color","stroke")
  local picker=make("Frame",{
   Position=UDim2.fromOffset(9,33),Size=UDim2.new(1,-18,0,98),
   Active=true,ClipsDescendants=true,BackgroundColor3=Color3.fromHSV(hue,1,1),
   BorderSizePixel=0
  },f)
- round(picker,3)
+ round(picker,Design.radius.small)
  local white=make("Frame",{
   Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),
   BorderSizePixel=0,Active=false
@@ -1100,13 +1277,13 @@ function Tab:CreateColorPicker(o)
   AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(9,9),
   BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
  },picker)
- round(target,5)
+ round(target,Design.radius.small)
  make("UIStroke",{Color=Color3.new(0,0,0),Thickness=1},target)
  local hueBar=make("Frame",{
   Position=UDim2.fromOffset(9,139),Size=UDim2.new(1,-18,0,12),
   BackgroundColor3=Color3.fromRGB(255,0,0),BorderSizePixel=0,Active=true
  },f)
- round(hueBar,3)
+ round(hueBar,Design.radius.small)
  make("UIGradient",{
   Color=ColorSequence.new({
    ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
@@ -1123,35 +1300,35 @@ function Tab:CreateColorPicker(o)
   BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
  },hueBar)
  local hex=make("TextBox",{
-  Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,25),
-  Text=colorHex(initial),Font=Enum.Font.Gotham,TextSize=13,
+  Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,27),
+  Text=colorHex(initial),Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
   ClearTextOnFocus=false,BorderSizePixel=0,
   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
  },f)
- round(hex,3)
- w:_theme(hex,"BackgroundColor3","panel")
- w:_theme(hex,"TextColor3","accent")
+ round(hex,Design.radius.control)
+ w:_theme(hex,"BackgroundColor3","raised")
+ w:_theme(hex,"TextColor3","text")
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
  local rgbFields={}
  local rgbCaptions={}
  for channel,name in ipairs({"R","G","B"}) do
   local fraction=(channel-1)/3
   local caption=make("TextLabel",{
-   Position=UDim2.new(fraction,10,0,191),Size=UDim2.fromOffset(16,25),
+   Position=UDim2.new(fraction,10,0,192),Size=UDim2.fromOffset(16,25),
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
    Font=Enum.Font.Gotham,TextSize=12
   },f)
   w:_theme(caption,"TextColor3","muted")
   rgbCaptions[channel]=caption
   local field=make("TextBox",{
-   Position=UDim2.new(fraction,28,0,191),Size=UDim2.new(1/3,-34,0,25),
+   Position=UDim2.new(fraction,28,0,192),Size=UDim2.new(1/3,-34,0,27),
    BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
    Font=Enum.Font.Gotham,TextSize=12,BorderSizePixel=0,
    ClearTextOnFocus=false,Text="0"
   },f)
-  round(field,3)
-  w:_theme(field,"BackgroundColor3","panel")
-  w:_theme(field,"TextColor3","accent")
+  round(field,Design.radius.small)
+  w:_theme(field,"BackgroundColor3","raised")
+  w:_theme(field,"TextColor3","text")
   rgbFields[channel]=field
  end
  local function repaint()
@@ -1169,7 +1346,7 @@ function Tab:CreateColorPicker(o)
  local handle={}
  local function setExpanded(v)
   expanded=v==true
-  f.Size=UDim2.new(1,-4,0,expanded and 230 or 42)
+  f.Size=UDim2.new(1,f.Parent==self.page and -4 or 0,0,expanded and 230 or Design.height.toggle)
   heading.Text=tostring(o.Name or "Colour picker")..(expanded and "  ▴" or "  ▾")
   picker.Visible=expanded
   hueBar.Visible=expanded
@@ -1286,24 +1463,26 @@ end
 function Tab:CreateKeybind(o)
  o=o or {}
  local w=self.window
- local f=self:_base(40)
+ local f=self:_base(Design.height.toggle)
  local mode=o.Mode or "Toggle"
  if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
  local label=make("TextLabel",{
   Text=tostring(o.Name or "Keybind"),Font=Enum.Font.GothamMedium,
-  TextSize=12,BackgroundTransparency=1,
+  TextSize=Design.type.body,BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,
-  Position=UDim2.fromOffset(8,0),Size=UDim2.new(.56,-8,1,0)
+  Position=UDim2.fromOffset(11,0),Size=UDim2.new(.56,-12,1,0)
  },f)
  w:_theme(label,"TextColor3","text")
  local button=make("TextButton",{
-  Size=UDim2.new(.42,-8,0,28),Position=UDim2.new(.58,0,0,6),
+  Size=UDim2.new(.42,-12,0,30),Position=UDim2.new(.58,0,0,7),
   BackgroundColor3=w.colors.raised,TextColor3=w.colors.accent,
-  Text="None",Font=Enum.Font.GothamMedium,TextSize=12,BorderSizePixel=0
+  Text="None",Font=Enum.Font.GothamMedium,TextSize=Design.type.label,BorderSizePixel=0
  },f)
- round(button,3)
+ round(button,Design.radius.control)
+ local keyStroke=make("UIStroke",{Thickness=1,Transparency=.58},button)
+ w:_theme(keyStroke,"Color","stroke")
  w:_theme(button,"BackgroundColor3","raised")
- w:_theme(button,"TextColor3","accent")
+ w:_theme(button,"TextColor3","text")
  local selected=nil
  local active=false
  local disabled=false
@@ -1373,9 +1552,9 @@ function Tab:CreateTextArea(o)
  local label=make("TextLabel",{
   Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
   Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Left
  },f)
- w:_theme(label,"TextColor3","accent")
+ w:_theme(label,"TextColor3","muted")
  local box=make("TextBox",{
   Size=UDim2.new(1,-12,1,-30),Position=UDim2.fromOffset(6,26),
   BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
@@ -1385,7 +1564,7 @@ function Tab:CreateTextArea(o)
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0
  },f)
- round(box,3)
+ round(box,Design.radius.control)
  w:_theme(box,"BackgroundColor3","raised")
  w:_theme(box,"TextColor3","text")
  w:_theme(box,"PlaceholderColor3","muted")
@@ -1567,7 +1746,7 @@ local function configObject(win,kind)
  return obj
 end
 function Window:_profileManager(tab,kind,store,onImported)
- local title=kind=="appearance" and "APPEARANCE PROFILES" or "GAME PROFILES"
+ local title=kind=="appearance" and "Saved appearance" or "Game profiles"
  tab:CreateSection(title)
  local storageLabel=tab:CreateLabel({Text="Storage: "..(self.StorageMode=="file" and "local files" or "session memory only")})
  local profile=tab:CreateInput({Name="Profile name",Default="default",Placeholder="Letters, numbers, - and _"})
@@ -1638,7 +1817,7 @@ function Window:_profileManager(tab,kind,store,onImported)
   w._autosaveDue[kind]=nil
   w:Notify(enabled and ("Auto-save to "..name.." enabled") or "Auto-save disabled","INFO")
  end})
- tab:CreateSection("JSON IMPORT / EXPORT")
+ tab:CreateSection("Import & export")
  local payload=tab:CreateTextArea({Name="Profile JSON",Height=125,Placeholder="Exported JSON appears here. Paste JSON here to import."})
  tab:CreateButton({Name="Export values to JSON",Callback=function()
   local ok,value=pcall(function()return store:Export()end)
@@ -1663,17 +1842,17 @@ function Lib:CreateWindow(o)
  local player=Players.LocalPlayer
  assert(player,"reefFish must run in a client LocalScript")
  local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
- local initialWidth=math.max(330,o.Size and o.Size.X.Offset or 560)
- local initialHeight=math.max(250,o.Size and o.Size.Y.Offset or 380)
+ local initialWidth=math.max(330,o.Size and o.Size.X.Offset or 600)
+ local initialHeight=math.max(250,o.Size and o.Size.Y.Offset or 420)
  local w=setmetatable({
   width=initialWidth,height=initialHeight,
   requestedWidth=initialWidth,requestedHeight=initialHeight,
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
+  rainEnabled=o.Rain==true,rainDensity=.43,rainSpeed=.25,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_boundOwners={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
-  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16),
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 4,3,16),
   _controlConnections={}
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
@@ -1697,55 +1876,72 @@ function Lib:CreateWindow(o)
  registry.__reefFishWindow=w
  w.screen=make("ScreenGui",{Name="reefFishUI",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},parent)
  w.root=make("Frame",{Size=UDim2.fromOffset(w.width,w.height),Position=UDim2.new(.5,-w.width/2,.5,-w.height/2),BorderSizePixel=0,ClipsDescendants=true},w.screen)
- w:_theme(w.root,"BackgroundColor3","border")
- round(w.root,9)
+ w:_theme(w.root,"BackgroundColor3","stroke")
+ round(w.root,Design.radius.window)
  local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
- round(inner,6)
+ round(inner,Design.radius.surface)
  w.inner=inner
- local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
+ local top=make("Frame",{Size=UDim2.new(1,0,0,Design.height.header),BorderSizePixel=0,ZIndex=6},inner)
+ local headerLine=make("Frame",{
+  Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BorderSizePixel=0,
+  BackgroundTransparency=.3,ZIndex=7
+ },top)
+ w:_theme(headerLine,"BackgroundColor3","stroke")
  w:_theme(top,"BackgroundColor3","panel")
+ local mark=make("Frame",{
+  Position=UDim2.fromOffset(14,15),Size=UDim2.fromOffset(20,20),
+  BorderSizePixel=0,ZIndex=7
+ },top)
+ round(mark,7)
+ w:_theme(mark,"BackgroundColor3","accent")
+ local markDot=make("Frame",{
+  Position=UDim2.fromOffset(7,7),Size=UDim2.fromOffset(6,6),
+  BackgroundTransparency=.15,BorderSizePixel=0,ZIndex=8
+ },mark)
+ round(markDot,3)
+ w:_theme(markDot,"BackgroundColor3","bg")
  local caption=make("TextLabel",{
-  Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(12,2),
-  Size=UDim2.new(1,-110,0,23),BackgroundTransparency=1,
+  Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(44,6),
+  Size=UDim2.new(1,-152,0,25),BackgroundTransparency=1,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.GothamBold,TextSize=15,ZIndex=7
+  Font=Enum.Font.GothamBold,TextSize=Design.type.title,ZIndex=7
  },top)
  w:_theme(caption,"TextColor3","text")
  local subtitle=make("TextLabel",{
-  Text="reefFish  /  "..Lib.Version,Position=UDim2.fromOffset(12,24),
-  Size=UDim2.new(1,-110,0,13),BackgroundTransparency=1,
+  Text="reefFish UI  ·  "..Lib.Version,Position=UDim2.fromOffset(44,30),
+  Size=UDim2.new(1,-152,0,14),BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.Gotham,TextSize=10,ZIndex=7
+  Font=Enum.Font.Gotham,TextSize=Design.type.caption,ZIndex=7
  },top)
  w:_theme(subtitle,"TextColor3","muted")
  local min=make("TextButton",{
-  Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-69,0,7),
+  Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-76,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
  },top)
  local close=make("TextButton",{
-  Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-36,0,7),
+  Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-41,0,11),
   BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
  },top)
  for _,b in ipairs({min,close}) do
-  round(b,5)
+  round(b,Design.radius.control)
   w:_theme(b,"BackgroundColor3","raised")
   w:_theme(b,"TextColor3","text")
   w:_feedback(b,b,"raised")
  end
- w.body=make("Frame",{Position=UDim2.fromOffset(0,42),Size=UDim2.new(1,0,1,-66),BackgroundTransparency=1,ZIndex=6},inner)
+ w.body=make("Frame",{Position=UDim2.fromOffset(0,Design.height.header),Size=UDim2.new(1,0,1,-(Design.height.header+Design.height.footer)),BackgroundTransparency=1,ZIndex=6},inner)
  w.nav=make("ScrollingFrame",{
   Size=UDim2.new(.26,0,1,0),ScrollBarThickness=0,
   BackgroundTransparency=0,CanvasSize=UDim2.new(),
   AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6
  },w.body)
  w:_theme(w.nav,"BackgroundColor3","bg")
- make("UIPadding",{
-  PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,6),
-  PaddingRight=UDim.new(0,2),PaddingBottom=UDim.new(0,8)
+ w._navPadding=make("UIPadding",{
+  PaddingTop=UDim.new(0,12),PaddingLeft=UDim.new(0,8),
+  PaddingRight=UDim.new(0,5),PaddingBottom=UDim.new(0,8)
  },w.nav)
- w._navLayout=make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
+ w._navLayout=make("UIListLayout",{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
  local navDivider=make("Frame",{
   Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
   BorderSizePixel=0,ZIndex=7,Active=false
@@ -1757,10 +1953,10 @@ function Lib:CreateWindow(o)
   BackgroundTransparency=1,ZIndex=6
  },w.body)
  w._status=make("TextLabel",{
-  Text="reefFish  •  Ready",Position=UDim2.new(0,11,1,-24),
-  Size=UDim2.new(1,-22,0,22),BackgroundTransparency=1,
+  Text="Ready",Position=UDim2.new(0,14,1,-25),
+  Size=UDim2.new(1,-28,0,23),BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,
-  TextSize=11,ZIndex=6
+  TextSize=Design.type.caption,ZIndex=6
  },inner)
  w:_theme(w._status,"TextColor3","muted")
  w._resizeGrip=make("TextButton",{
@@ -1903,6 +2099,8 @@ function Lib:CreateWindow(o)
   ClipsDescendants=true,Active=false,ZIndex=2
  },w.root)
  w._rainLayer=rainLayer
+  rainLayer.Visible=w.rainEnabled
+  w:_refreshChrome()
  local function hex(c)
   return string.format("#%02X%02X%02X",
    math.floor(c.R*255+.5),
@@ -2018,8 +2216,8 @@ function Lib:CreateWindow(o)
   end
  end)
  if not o.HideBuiltins then
-  local appearance=w:CreateTab({Name="APPEARANCE"})
-  appearance:CreateSection("CONSOLE STYLE")
+  local appearance=w:CreateTab({Name="Appearance"})
+  appearance:CreateSection("Theme & display")
   local theme=appearance:CreateDropdown({
    Name="Theme",Options={"MatrixInverse","ClassicCRT","AmberTerminal","IceConsole","Monochrome"},
    Default=w.themeName,Callback=function(value)w:SetTheme(value)end
@@ -2029,7 +2227,7 @@ function Lib:CreateWindow(o)
    Callback=function(c)w:SetAccentColor(c)end
   })
   local rain=appearance:CreateToggle({
-   Name="Matrix rain",Default=w.rainEnabled,
+   Name="Matrix rain",Description="Optional animated border effect",Default=w.rainEnabled,
    Callback=function(value)w:SetRain(value)end
   })
   local density=appearance:CreateSlider({
@@ -2055,8 +2253,8 @@ function Lib:CreateWindow(o)
    border:Set(w.borderThickness)
   end
   w:_profileManager(appearance,"appearance",w.Appearance,syncAppearance)
-  local config=w:CreateTab({Name="CONFIG"})
-  config:CreateLabel({Text="Profiles are isolated by game.GameId. Loading restores values, not callbacks."})
+  local config=w:CreateTab({Name="Profiles"})
+  config:CreateLabel({Text="Save settings for this game. Loading a profile restores values without running actions."})
   w:_profileManager(config,"game",w.Config)
  end
  return w
