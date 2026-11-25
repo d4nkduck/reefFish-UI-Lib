@@ -1159,27 +1159,29 @@ function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
  local expanded=o.Expanded==true
- local f=self:_base(expanded and 230 or 42)
+ local f=self:_base(expanded and 230 or Design.height.toggle)
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
  local heading=make("TextButton",{
-  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.GothamMedium,TextSize=12,AutoButtonColor=false,
+  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.GothamMedium,TextSize=Design.type.body,AutoButtonColor=false,
   TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
-  Position=UDim2.fromOffset(9,4),Size=UDim2.new(1,-82,0,22)
+  Position=UDim2.fromOffset(11,6),Size=UDim2.new(1,-85,0,28)
  },f)
  w:_theme(heading,"TextColor3","text")
  local swatch=make("TextButton",{
-  Position=UDim2.new(1,-43,0,7),Size=UDim2.fromOffset(30,18),
+  Position=UDim2.new(1,-43,0,10),Size=UDim2.fromOffset(28,23),
   BackgroundColor3=initial,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
- round(swatch,3)
+ round(swatch,Design.radius.small)
+ local swatchOutline=make("UIStroke",{Thickness=1,Transparency=.4},swatch)
+ w:_theme(swatchOutline,"Color","stroke")
  local picker=make("Frame",{
   Position=UDim2.fromOffset(9,33),Size=UDim2.new(1,-18,0,98),
   Active=true,ClipsDescendants=true,BackgroundColor3=Color3.fromHSV(hue,1,1),
   BorderSizePixel=0
  },f)
- round(picker,3)
+ round(picker,Design.radius.small)
  local white=make("Frame",{
   Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),
   BorderSizePixel=0,Active=false
@@ -1204,13 +1206,13 @@ function Tab:CreateColorPicker(o)
   AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(9,9),
   BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
  },picker)
- round(target,5)
+ round(target,Design.radius.small)
  make("UIStroke",{Color=Color3.new(0,0,0),Thickness=1},target)
  local hueBar=make("Frame",{
   Position=UDim2.fromOffset(9,139),Size=UDim2.new(1,-18,0,12),
   BackgroundColor3=Color3.fromRGB(255,0,0),BorderSizePixel=0,Active=true
  },f)
- round(hueBar,3)
+ round(hueBar,Design.radius.small)
  make("UIGradient",{
   Color=ColorSequence.new({
    ColorSequenceKeypoint.new(0,Color3.fromRGB(255,0,0)),
@@ -1227,35 +1229,35 @@ function Tab:CreateColorPicker(o)
   BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,Active=false
  },hueBar)
  local hex=make("TextBox",{
-  Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,25),
-  Text=colorHex(initial),Font=Enum.Font.Gotham,TextSize=13,
+  Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,27),
+  Text=colorHex(initial),Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
   ClearTextOnFocus=false,BorderSizePixel=0,
   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
  },f)
- round(hex,3)
- w:_theme(hex,"BackgroundColor3","panel")
- w:_theme(hex,"TextColor3","accent")
+ round(hex,Design.radius.control)
+ w:_theme(hex,"BackgroundColor3","raised")
+ w:_theme(hex,"TextColor3","text")
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
  local rgbFields={}
  local rgbCaptions={}
  for channel,name in ipairs({"R","G","B"}) do
   local fraction=(channel-1)/3
   local caption=make("TextLabel",{
-   Position=UDim2.new(fraction,10,0,191),Size=UDim2.fromOffset(16,25),
+   Position=UDim2.new(fraction,10,0,192),Size=UDim2.fromOffset(16,25),
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
    Font=Enum.Font.Gotham,TextSize=12
   },f)
   w:_theme(caption,"TextColor3","muted")
   rgbCaptions[channel]=caption
   local field=make("TextBox",{
-   Position=UDim2.new(fraction,28,0,191),Size=UDim2.new(1/3,-34,0,25),
+   Position=UDim2.new(fraction,28,0,192),Size=UDim2.new(1/3,-34,0,27),
    BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
    Font=Enum.Font.Gotham,TextSize=12,BorderSizePixel=0,
    ClearTextOnFocus=false,Text="0"
   },f)
-  round(field,3)
-  w:_theme(field,"BackgroundColor3","panel")
-  w:_theme(field,"TextColor3","accent")
+  round(field,Design.radius.small)
+  w:_theme(field,"BackgroundColor3","raised")
+  w:_theme(field,"TextColor3","text")
   rgbFields[channel]=field
  end
  local function repaint()
@@ -1273,7 +1275,7 @@ function Tab:CreateColorPicker(o)
  local handle={}
  local function setExpanded(v)
   expanded=v==true
-  f.Size=UDim2.new(1,-4,0,expanded and 230 or 42)
+  f.Size=UDim2.new(1,self._group and 0 or -4,0,expanded and 230 or Design.height.toggle)
   heading.Text=tostring(o.Name or "Colour picker")..(expanded and "  ▴" or "  ▾")
   picker.Visible=expanded
   hueBar.Visible=expanded
@@ -1390,24 +1392,26 @@ end
 function Tab:CreateKeybind(o)
  o=o or {}
  local w=self.window
- local f=self:_base(40)
+ local f=self:_base(Design.height.toggle)
  local mode=o.Mode or "Toggle"
  if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
  local label=make("TextLabel",{
   Text=tostring(o.Name or "Keybind"),Font=Enum.Font.GothamMedium,
-  TextSize=12,BackgroundTransparency=1,
+  TextSize=Design.type.body,BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,
-  Position=UDim2.fromOffset(8,0),Size=UDim2.new(.56,-8,1,0)
+  Position=UDim2.fromOffset(11,0),Size=UDim2.new(.56,-12,1,0)
  },f)
  w:_theme(label,"TextColor3","text")
  local button=make("TextButton",{
-  Size=UDim2.new(.42,-8,0,28),Position=UDim2.new(.58,0,0,6),
+  Size=UDim2.new(.42,-12,0,30),Position=UDim2.new(.58,0,0,7),
   BackgroundColor3=w.colors.raised,TextColor3=w.colors.accent,
-  Text="None",Font=Enum.Font.GothamMedium,TextSize=12,BorderSizePixel=0
+  Text="None",Font=Enum.Font.GothamMedium,TextSize=Design.type.label,BorderSizePixel=0
  },f)
- round(button,3)
+ round(button,Design.radius.control)
+ local keyStroke=make("UIStroke",{Thickness=1,Transparency=.58},button)
+ w:_theme(keyStroke,"Color","stroke")
  w:_theme(button,"BackgroundColor3","raised")
- w:_theme(button,"TextColor3","accent")
+ w:_theme(button,"TextColor3","text")
  local selected=nil
  local active=false
  local disabled=false
@@ -1477,9 +1481,9 @@ function Tab:CreateTextArea(o)
  local label=make("TextLabel",{
   Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
   Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.label,TextXAlignment=Enum.TextXAlignment.Left
  },f)
- w:_theme(label,"TextColor3","accent")
+ w:_theme(label,"TextColor3","muted")
  local box=make("TextBox",{
   Size=UDim2.new(1,-12,1,-30),Position=UDim2.fromOffset(6,26),
   BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
@@ -1489,7 +1493,7 @@ function Tab:CreateTextArea(o)
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0
  },f)
- round(box,3)
+ round(box,Design.radius.control)
  w:_theme(box,"BackgroundColor3","raised")
  w:_theme(box,"TextColor3","text")
  w:_theme(box,"PlaceholderColor3","muted")
