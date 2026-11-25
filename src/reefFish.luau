@@ -1506,6 +1506,7 @@ function Lib:CreateWindow(o)
   Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
   BorderSizePixel=0,ZIndex=7,Active=false
  },w.body)
+ w._navDivider=navDivider
  w:_theme(navDivider,"BackgroundColor3","raised")
  w.content=make("Frame",{
   Size=UDim2.new(.74,-3,1,0),Position=UDim2.new(.26,3,0,0),
@@ -1518,6 +1519,15 @@ function Lib:CreateWindow(o)
   TextSize=11,ZIndex=6
  },inner)
  w:_theme(w._status,"TextColor3","muted")
+ w._resizeGrip=make("TextButton",{
+  Name="ResizeGrip",Size=UDim2.fromOffset(24,24),
+  Position=UDim2.new(1,-24,1,-24),
+  BackgroundTransparency=1,Text="◢",
+  Font=Enum.Font.Gotham,TextSize=15,
+  TextColor3=w.colors.muted,AutoButtonColor=false,
+  BorderSizePixel=0,ZIndex=20
+ },inner)
+ w:_theme(w._resizeGrip,"TextColor3","muted")
  w._toastLayer=make("Frame",{
   Position=UDim2.new(1,-299,1,-250),Size=UDim2.fromOffset(280,225),
   BackgroundTransparency=1,BorderSizePixel=0,ZIndex=175
@@ -1559,19 +1569,70 @@ function Lib:CreateWindow(o)
  end)
  w._connections[#w._connections+1]=min.MouseButton1Click:Connect(function()w:SetMinimized(not w.minimized)end)
  w._connections[#w._connections+1]=close.MouseButton1Click:Connect(function()w:Destroy()end)
- local drag=false local dragStart,startPos
+ -- Touch and mouse dragging share a single tracked gesture.
+ local dragStart,startPos,resizeStart,startWidth,startHeight
+ local dragTouch,resizeTouch
+ local dragging,resizing=false,false
+ local function isPointer(i)
+  return i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch
+ end
  w._connections[#w._connections+1]=top.InputBegan:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=true dragStart=i.Position startPos=w.root.Position end
+  if not isPointer(i) or resizing or w.destroyed then return end
+  -- Title-bar actions shouldn't initiate dragging.
+  local pos=i.Position
+  local minX=min.AbsolutePosition.X
+  local closeX=close.AbsolutePosition.X
+  if (pos.X>=minX and pos.X<=minX+min.AbsoluteSize.X)
+   or (pos.X>=closeX and pos.X<=closeX+close.AbsoluteSize.X) then return end
+  dragging=true
+  dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+  dragStart=i.Position
+  startPos=w.root.Position
+ end)
+ w._connections[#w._connections+1]=w._resizeGrip.InputBegan:Connect(function(i)
+  if not isPointer(i) or w.minimized or dragging or w.destroyed then return end
+  resizing=true
+  resizeTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+  resizeStart=i.Position
+  startWidth,startHeight=w.width,w.height
  end)
  w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end
- end)
- w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if drag and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
-   local diff=i.Position-dragStart
-   w.root.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+diff.X,startPos.Y.Scale,startPos.Y.Offset+diff.Y)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 then
+   dragging=false resizing=false dragTouch=nil resizeTouch=nil
+  elseif i.UserInputType==Enum.UserInputType.Touch then
+   if i==dragTouch then dragging=false dragTouch=nil end
+   if i==resizeTouch then resizing=false resizeTouch=nil end
   end
  end)
+ w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
+  local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
+  if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
+   local diff=i.Position-dragStart
+   w.root.Position=UDim2.fromOffset(startPos.X.Offset+diff.X,startPos.Y.Offset+diff.Y)
+   w:_clampPosition()
+  elseif resizing and (mouseMove and resizeTouch==nil or i==resizeTouch) then
+   local diff=i.Position-resizeStart
+   w:SetSize(startWidth+diff.X,startHeight+diff.Y)
+  end
+ end)
+ -- Fit the window to the viewport initially and on display rotation/resize.
+ local function connectViewport(camera)
+  if w._viewportConnection then w._viewportConnection:Disconnect() end
+  w._viewportConnection=nil
+  if camera then
+   w._viewportConnection=camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    w:_layout()
+   end)
+  end
+  w:_layout()
+ end
+ w._connections[#w._connections+1]=workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+  connectViewport(workspace.CurrentCamera)
+ end)
+ w._connections[#w._connections+1]=w.screen.Destroying:Connect(function()
+  if w._viewportConnection then w._viewportConnection:Disconnect() w._viewportConnection=nil end
+ end)
+ connectViewport(workspace.CurrentCamera)
  -- reefFish v0.1.3: full-window VERTICAL matrix rain, with a border mask.
  -- This intentionally looks like a conventional rain wallpaper:
  -- every column falls DOWN only, its tail fading from pale ink to near-black.
