@@ -325,7 +325,8 @@ function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
   Text="  "..tostring(name),Size=UDim2.new(1,-10,0,32),
-  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.GothamMedium,TextSize=12,
+  TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
  },self.nav)
  round(button,5)
