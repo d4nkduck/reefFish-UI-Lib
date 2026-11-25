@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.4.0-alpha
+-- reefFish UI Lib v0.4.1-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.0-alpha"}
+local Lib={Version="0.4.1-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -93,12 +93,12 @@ end
 local Window={} Window.__index=Window
 local Tab={} Tab.__index=Tab
 -- Small, central interaction-state engine: no per-control animation loops.
-function Window:_feedback(hitbox,surface)
+function Window:_feedback(hitbox,surface,baseToken)
  local state="normal"
  local currentTween
  local function refresh(animate)
   if not surface.Parent then return end
-  local base=self.colors.panel
+  local base=self.colors[baseToken or "panel"] or self.colors.panel
   local target=base
   if state=="hover" then
    target=base:Lerp(self.colors.accent,.08)
@@ -237,11 +237,57 @@ function Window:SetHidden(value)
  self.screen.Enabled=not self.hidden
  return self.hidden
 end
+function Window:_viewport()
+ local camera=workspace.CurrentCamera
+ return camera and camera.ViewportSize or Vector2.new(1280,720)
+end
+function Window:_clampPosition()
+ if not self.root then return end
+ local viewport=self:_viewport()
+ local size=self.root.Size
+ local x=self.root.Position.X.Scale*viewport.X+self.root.Position.X.Offset
+ local y=self.root.Position.Y.Scale*viewport.Y+self.root.Position.Y.Offset
+ local margin=8
+ local maxX=math.max(margin,viewport.X-size.X.Offset-margin)
+ local maxY=math.max(margin,viewport.Y-size.Y.Offset-margin)
+ self.root.Position=UDim2.fromOffset(
+  math.floor(math.clamp(x,margin,maxX)+.5),
+  math.floor(math.clamp(y,margin,maxY)+.5)
+ )
+end
+function Window:_layout()
+ if not self.root then return end
+ local viewport=self:_viewport()
+ local maxWidth=math.max(200,math.floor(viewport.X-16))
+ local maxHeight=math.max(170,math.floor(viewport.Y-16))
+ self.width=math.clamp(self.width,math.min(330,maxWidth),maxWidth)
+ self.height=math.clamp(self.height,math.min(250,maxHeight),maxHeight)
+ local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
+ self.root.Size=UDim2.fromOffset(self.width,shownHeight)
+ if self.nav and self.content then
+  local navWidth=math.clamp(math.floor(self.width*.26),95,155)
+  if self.width<390 then navWidth=90 end
+  self.nav.Size=UDim2.new(0,navWidth,1,0)
+  self.content.Position=UDim2.fromOffset(navWidth+3,0)
+  self.content.Size=UDim2.new(1,-navWidth-3,1,0)
+  if self._navDivider then self._navDivider.Position=UDim2.fromOffset(navWidth,0) end
+ end
+ if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
+ if self._ensureRainColumns then self._ensureRainColumns(self.width) end
+ self:_clampPosition()
+end
+function Window:SetSize(width,height)
+ if typeof(width)=="Vector2" then height=width.Y width=width.X end
+ if type(width)=="number" and width==width then self.width=math.floor(width+.5) end
+ if type(height)=="number" and height==height then self.height=math.floor(height+.5) end
+ self:_layout()
+ return Vector2.new(self.width,self.height)
+end
 function Window:SetMinimized(value)
  self.minimized=value==true
  if self._closeDropdown then self._closeDropdown() end
  self.body.Visible=not self.minimized
- self.root.Size=UDim2.fromOffset(self.width,self.minimized and (42+self.borderThickness*2) or self.height)
+ self:_layout()
 end
 function Window:SelectTab(tab)
  if not tab then return end
@@ -1442,7 +1488,7 @@ function Lib:CreateWindow(o)
   round(b,5)
   w:_theme(b,"BackgroundColor3","raised")
   w:_theme(b,"TextColor3","text")
-  w:_feedback(b,b)
+  w:_feedback(b,b,"raised")
  end
  w.body=make("Frame",{Position=UDim2.fromOffset(0,42),Size=UDim2.new(1,0,1,-66),BackgroundTransparency=1,ZIndex=6},inner)
  w.nav=make("ScrollingFrame",{
