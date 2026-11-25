@@ -113,15 +113,35 @@ function Window:_feedback(hitbox,surface,baseToken)
    surface.BackgroundColor3=target
   end
  end
- self._feedbackRefresh[#self._feedbackRefresh+1]=function()refresh(false)end
+ self._feedbackRefresh[#self._feedbackRefresh+1]={owner=surface,refresh=function()refresh(false)end}
  local function add(signal,fn)
-  self._connections[#self._connections+1]=signal:Connect(fn)
+  return self:_connectControl(surface,signal,fn)
  end
  add(hitbox.MouseEnter,function()state="hover" refresh(true)end)
  add(hitbox.MouseLeave,function()state="normal" refresh(true)end)
  add(hitbox.MouseButton1Down,function()state="pressed" refresh(true)end)
  add(hitbox.MouseButton1Up,function()state="hover" refresh(true)end)
  refresh(false)
+end
+function Window:_connectControl(owner,signal,callback)
+ local connection=signal:Connect(callback)
+ local bucket=self._controlConnections[owner]
+ if not bucket then
+  bucket={}
+  self._controlConnections[owner]=bucket
+  owner.Destroying:Connect(function()
+   for _,c in ipairs(bucket) do c:Disconnect() end
+   self._controlConnections[owner]=nil
+  end)
+ end
+ bucket[#bucket+1]=connection
+ return connection
+end
+function Window:_refreshFeedback()
+ for i=#self._feedbackRefresh,1,-1 do
+  local item=self._feedbackRefresh[i]
+  if item.owner.Parent then item.refresh() else table.remove(self._feedbackRefresh,i) end
+ end
 end
 function Window:_markChanged(kind)
  if self._importing then return end
@@ -147,8 +167,12 @@ function Window:SetTheme(name)
  if not palettes[name] then return false end
  if self._closeDropdown then self._closeDropdown() end
  self.themeName=name self.colors=table.clone(palettes[name])
- for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
- for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ for i=#self._bound,1,-1 do
+  local bound=self._bound[i]
+  if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]]
+  else table.remove(self._bound,i) end
+ end
+ self:_refreshFeedback()
  if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
@@ -159,10 +183,12 @@ function Window:SetAccentColor(value)
  local color=parseColor(value)
  if not color then return false end
  self.colors.accent=color
- for _,bound in ipairs(self._bound) do
-  if bound[3]=="accent" and bound[1].Parent then bound[1][bound[2]]=color end
+ for i=#self._bound,1,-1 do
+  local bound=self._bound[i]
+  if not bound[1].Parent then table.remove(self._bound,i)
+  elseif bound[3]=="accent" then bound[1][bound[2]]=color end
  end
- for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ self:_refreshFeedback()
  if self.active then self:SelectTab(self.active) end
  self:_markChanged("appearance")
  return true
@@ -483,7 +509,7 @@ function Tab:CreateToggle(o)
    knob.BackgroundColor3=knobColor
   end
  end
- w._feedbackRefresh[#w._feedbackRefresh+1]=function()render(false)end
+ w._feedbackRefresh[#w._feedbackRefresh+1]={owner=f,refresh=function()render(false)end}
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
@@ -503,7 +529,7 @@ function Tab:CreateToggle(o)
   end
   return true
  end
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
   if not disabled then handle:Set(not value,true) end
  end)
@@ -597,7 +623,7 @@ function Tab:CreateSlider(o)
    updateFromPosition(i.Position)
   end
  end)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  render()
  return handle
 end
@@ -825,7 +851,7 @@ function Tab:CreateDropdown(o)
   search:GetPropertyChangedSignal("Text"):Connect(updateList)
   updateList()
  end)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  render()
  return handle
 end
@@ -862,7 +888,7 @@ function Tab:CreateInput(o)
   outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
   outline.Transparency=box:IsFocused() and 0 or .5
  end
- w._feedbackRefresh[#w._feedbackRefresh+1]=refreshOutline
+ w._feedbackRefresh[#w._feedbackRefresh+1]={owner=f,refresh=refreshOutline}
  w._connections[#w._connections+1]=box.Focused:Connect(refreshOutline)
  local handle={}
  function handle:SetDisabled(v)
@@ -902,7 +928,7 @@ function Tab:CreateInput(o)
   end
   handle:Set(box.Text,true)
  end)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  return handle
 end
 -- A readable paragraph card for long help or diagnostic descriptions.
@@ -1162,7 +1188,7 @@ function Tab:CreateColorPicker(o)
    end
   end)
  end
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  repaint()
  setExpanded(expanded)
  return handle
@@ -1239,7 +1265,7 @@ function Tab:CreateKeybind(o)
  end)
  handle:Set(o.Default or "None")
  table.insert(w._keybinds,handle)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  redraw()
  return handle
 end
@@ -1280,8 +1306,15 @@ function Tab:CreateTextArea(o)
  function handle:Destroy()f:Destroy()end
  return handle
 end
-function Window:_register(flag,handle)
- if type(flag)=="string" and #flag>0 then self.flags[flag]=handle end
+function Window:_register(flag,handle,owner)
+ if type(flag)=="string" and #flag>0 then
+  self.flags[flag]=handle
+  if owner then
+   owner.Destroying:Connect(function()
+    if self.flags[flag]==handle then self.flags[flag]=nil end
+   end)
+  end
+ end
 end
 local memory={}
 local function configObject(win,kind)
