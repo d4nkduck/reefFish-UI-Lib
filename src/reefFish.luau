@@ -414,6 +414,11 @@ function Window:Destroy()
  end
  table.clear(self.flags)
  self.screen:Destroy()
+ table.clear(self._bound)
+ table.clear(self._boundOwners)
+ table.clear(self._feedbackRefresh)
+ table.clear(self._keybinds)
+ table.clear(self._connections)
  if self._registry and self._registry.__reefFishWindow==self then
   self._registry.__reefFishWindow=nil
  end
