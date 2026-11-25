@@ -2,10 +2,12 @@
 -- Place src/reefFish.luau as a ModuleScript named ReefFish in ReplicatedStorage.
 -- Run this from StarterPlayerScripts as a LocalScript.
 local ReefFish = require(game:GetService("ReplicatedStorage"):WaitForChild("ReefFish"))
+-- Upload assets/reefFish-icon.png to Roblox, then optionally supply its image asset ID:
+-- Icon="rbxassetid://YOUR_ROBLOX_IMAGE_ASSET_ID"
 local window = ReefFish:CreateWindow({Title="reefFish Playground",Theme="MatrixInverse"})
 local main=window:CreateTab({Name="Overview"})
 main:CreateSection("Quick actions")
-main:CreateLabel({Text="reefFish v0.4.3  •  Visual system preview"})
+main:CreateLabel({Text="reefFish v0.5.0  •  Search, dialogs and rich controls"})
 main:CreateButton({
  Name="Run quick check",Variant="Primary",Description="Verify notifications and actions",
  Callback=function()window:Notify("Interface is responding","OK")end
@@ -26,6 +28,37 @@ local colour=main:CreateColorPicker({
  Callback=function(value)print("Accent:",value)end
 })
 assert(colour:GetExpanded()==false,"Colour picker should start compact")
+main:CreateSection("New in v0.5")
+local progress=main:CreateProgressBar({Name="Example task",Min=0,Max=100,Default=20})
+local liveStatus=main:CreateStatus({Name="UI health",Value="Ready",Level="success"})
+assert(progress:Get()==20,"Progress initialization failed")
+main:CreateButton({Name="Advance progress",Callback=function()
+ progress:Set(math.min(100,progress:Get()+20),true)
+ liveStatus:Set(progress:Get()>=100 and "Complete" or "Working","success")
+end})
+main:CreateButton({Name="Open confirmation dialog",Variant="Secondary",
+ Callback=function()
+  window:Confirm({
+   Title="Confirm action",Content="This is the native reefFish confirmation dialog.",
+   ConfirmText="Continue",OnConfirm=function()
+    window:Notify("Confirmed","OK")
+   end
+  })
+ end
+})
+main:CreateButton({Name="Search all settings",Callback=function()
+ window:OpenSearch()
+end})
+main:CreateButton({Name="UI diagnostics",Callback=function()
+ local info=window:GetDiagnostics()
+ window:Notify(tostring(info.counts.controls).." controls | "..tostring(info.counts.tabs).." tabs","INFO")
+end})
+local advanced=main:CreateCollapsibleSection({Name="Advanced options",Expanded=false})
+assert(advanced:GetExpanded()==false,"Collapsible section should start folded")
+main:CreateToggle({Name="Advanced debug toggle",Default=false})
+main:CreateButton({Name="Advanced test action",Callback=function()
+ window:Notify("Advanced action works","OK")
+end})
 main:CreateSection("Layout & stress tests")
 local wide=false
 main:CreateButton({Name="Toggle window size",Callback=function()
@@ -69,6 +102,7 @@ main:CreateButton({Name="Test theme changes",Callback=function()
  assert(window:SetTheme(initial),"Theme restoration failed")
  window:Notify("Theme refresh passed","OK")
 end})
+assert(#window:FindControls("Test delay")>0,"Global control indexing failed")
 local preset=main:CreateInput({Name="Profile name",Default="default"})
 main:CreateButton({Name="Save profile",Callback=function()
  local ok,msg=window.Config:Save(preset:Get())
