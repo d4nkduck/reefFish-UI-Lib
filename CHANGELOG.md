@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-alpha — Refinement before differentiation
+
+- Slimmed the default inverse-Matrix bezel from 12 px to 5 px (range now 3–16 px) and softened the default rain density and speed.
+- Rebalanced the window into a cleaner title bar, less dominant sidebar, and wider content area, with a visible selected-tab marker.
+- Replaced heavy console-only typography with readable Gotham UI labels and compact sections, cards, and actions.
+- Redesigned toggles as animated switches; gave sliders separate value readouts and a larger invisible drag target.
+- Refined dropdowns, including multi-select highlighting, shorter inputs, and more consistent toasts.
+- Made the colour picker **collapsed by default**, with title/swatch click-to-expand and optional `Expanded=true` / `:SetExpanded(bool)` support.
+- Kept existing control method names, profile flag persistence, themes, keybind handling and inverse-Matrix renderer.
+- Continued shipping through stable `dist/reefFish.lua`; older pinned v0.3 distribution remains unchanged.
+- Static syntax/balance and compatibility checks passed. Live Roblox rendering must be tested in a compatible client.
+
 ## 0.3.0-alpha — Advanced components and interaction layer
 
 - Implemented original colour picker with HSV square, hue bar, hexadecimal input, live swatch and Color3 API.
