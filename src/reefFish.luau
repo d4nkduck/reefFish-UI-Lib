@@ -280,6 +280,90 @@ function Window:SetRain(enabled,density,speed)
  self:_markChanged("appearance")
 end
 -- Small capped toast queue with a timed dismissal.
+-- Lightweight, non-blocking confirmation modal. No continuous render loops.
+function Window:Confirm(options)
+ options=options or {}
+ if self.destroyed or not self.screen then return nil end
+ if self._dialog then self._dialog:Dismiss(true) end
+ if self._searchOverlay then self:CloseSearch() end
+ local viewport=self:_viewport()
+ local panelWidth=math.min(420,math.max(230,viewport.X-28))
+ local panelHeight=math.min(238,math.max(170,viewport.Y-28))
+ local overlay=make("Frame",{
+  Name="ReefFishConfirm",Size=UDim2.fromScale(1,1),
+  BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=.45,
+  BorderSizePixel=0,ZIndex=225
+ },self.screen)
+ local panel=make("Frame",{
+  AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+  Size=UDim2.fromOffset(panelWidth,panelHeight),
+  BorderSizePixel=0,ZIndex=226
+ },overlay)
+ round(panel,Design.radius.surface)
+ self:_theme(panel,"BackgroundColor3","panel")
+ local edge=make("UIStroke",{Thickness=1,Transparency=.3},panel)
+ self:_theme(edge,"Color","stroke")
+ local title=make("TextLabel",{
+  Text=tostring(options.Title or "Are you sure?"),Position=UDim2.fromOffset(18,13),
+  Size=UDim2.new(1,-36,0,30),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,
+  Font=Enum.Font.GothamBold,TextSize=16,ZIndex=227
+ },panel)
+ self:_theme(title,"TextColor3","text")
+ local body=make("TextLabel",{
+  Text=tostring(options.Content or options.Message or ""),
+  Position=UDim2.fromOffset(18,48),Size=UDim2.new(1,-36,1,-105),
+  TextWrapped=true,TextYAlignment=Enum.TextYAlignment.Top,
+  TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
+  Font=Enum.Font.Gotham,TextSize=Design.type.body,ZIndex=227
+ },panel)
+ self:_theme(body,"TextColor3","muted")
+ local cancel=make("TextButton",{
+  Text=tostring(options.CancelText or "Cancel"),
+  Position=UDim2.new(.5,-126,1,-48),Size=UDim2.fromOffset(118,34),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  BorderSizePixel=0,AutoButtonColor=false,ZIndex=227
+ },panel)
+ round(cancel,Design.radius.control)
+ self:_theme(cancel,"TextColor3","text")
+ self:_theme(cancel,"BackgroundColor3","raised")
+ local confirm=make("TextButton",{
+  Text=tostring(options.ConfirmText or "Confirm"),
+  Position=UDim2.new(.5,8,1,-48),Size=UDim2.fromOffset(118,34),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  BorderSizePixel=0,AutoButtonColor=false,ZIndex=227
+ },panel)
+ round(confirm,Design.radius.control)
+ self:_theme(confirm,"BackgroundColor3",options.Danger==true and "danger" or "accent")
+ self:_theme(confirm,"TextColor3","bg")
+ local handle={}
+ local selfWindow=self
+ local closed=false
+ function handle:Dismiss(silent)
+  if closed then return end
+  closed=true
+  if self==handle and overlay.Parent then overlay:Destroy() end
+  if self==handle and selfWindow._dialog==handle then selfWindow._dialog=nil end
+  if not silent then
+   fire(options.OnCancel)
+   if not options.OnConfirm then fire(options.Callback,false) end
+  end
+ end
+ function handle:Cancel()self:Dismiss(false)end
+ function handle:Confirm()
+  if closed then return end
+  self:Dismiss(true)
+  fire(options.OnConfirm or options.Callback,true)
+ end
+ self._dialog=handle
+ cancel.MouseButton1Click:Connect(function()handle:Cancel()end)
+ confirm.MouseButton1Click:Connect(function()handle:Confirm()end)
+ return handle
+end
+function Window:Dialog(options)
+ return self:Confirm(options)
+end
+
 function Window:Toast(info)
  info=type(info)=="table" and info or {Content=tostring(info)}
  if self.destroyed or not self._toastLayer then return nil end
@@ -471,6 +555,8 @@ function Window:Destroy()
  if self.destroyed then return end
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
+ if self._dialog then self._dialog:Dismiss(true) end
+ if self._searchOverlay then self:CloseSearch() end
  self._bindingCapture=nil
  if self._viewportConnection then
   self._viewportConnection:Disconnect()
