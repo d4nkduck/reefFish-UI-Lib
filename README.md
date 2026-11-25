@@ -1,8 +1,8 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.4.0-alpha  
+**Version:** 0.4.1-alpha  
 **License:** MIT  
-**Status:** Visual refinement alpha — component API remains compatible
+**Status:** Usability refinement alpha — existing component APIs remain compatible
 
 A compact Roblox Luau UI library with a familiar, polished control layout and an optional inverse-Matrix bezel. Built for game debug tooling and reusable in client-side Roblox Studio projects.
 
@@ -14,7 +14,7 @@ Polish and reliability take priority over unusual new features. Default sizing a
 
 ## What works today
 
-- Draggable console window, minimize and close buttons, status line, notification banner
+- Draggable and resizable window with touch/mouse support, automatic viewport fitting, minimize/close buttons, status line and toasts
 - Slim (5 px default, configurable 3–16 px) inverse-Matrix bezel revealing a single vertical falling-code field that slowly scrolls right, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
 - UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, searchable single/multi-select dropdowns, colour picker (HSV/HEX), keybinds (Press/Toggle/Hold), paragraphs and text inputs
@@ -32,7 +32,7 @@ Polish and reliability take priority over unusual new features. Default sizing a
 
 ## What is planned, not implemented
 
-Graphs, richer console drawer, notification actions, automated tests across client builds, responsive small-screen design, multi-window support, cross-session auto-load, theme import/export beyond the built-in presets, and a resizable main window.
+Still planned: full phone/tablet usability validation, accessibility and keyboard navigation for all controls, graphs, richer log drawer, notification actions, automated tests across Roblox clients, multi-window support, cross-session auto-load and custom theme import/export. The window now resizes and clamps to the viewport, but in-game testing on small devices is outstanding.
 
 ## Installation (Roblox Studio)
 
@@ -84,13 +84,13 @@ print(ok, reason)
 - `tab:CreateSlider({Name="NAME", Flag="unique-id", Min=0, Max=100, Increment=1, Default=25, Callback=function(number) end})` → `:Get()`, `:Set(number, fireCallback)`
 - `tab:CreateDropdown({Name="NAME", Flag="unique-id", Options={"A","B"}, Default="A", Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateInput({Name="NAME", Flag="unique-id", Default="text", Numeric=false, Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
-- `tab:CreateParagraph({Title="Help", Content="Long explanation", Height=96})` → `:Set(title,content)`
+- `tab:CreateParagraph({Title="Help", Content="Long explanation"})` → `:Set(title,content)`; auto-height is the default, and `Height=96` opts into a fixed-height card
 - `tab:CreateColorPicker({Name="Tint", Flag="tint", Default=Color3.fromRGB(0,255,120), Callback=function(color3) end})` → `:Get()`, `:GetHex()`, `:GetRGB()`, `:Set(Color3 or "#RRGGBB", fireCallback)`, `:SetRGB(r,g,b,fireCallback)`, `:SetExpanded(bool)`. The editor is collapsed by default; use `Expanded=true` to open it initially.
 - `tab:CreateMultiDropdown({Name="Filters", Flag="filters", Options={"A","B"}, Default={"A"}, Callback=function(array) end})` → `:Get()`, `:Set(array, fireCallback)`
 - `tab:CreateKeybind({Name="Overlay key", Flag="overlay.key", Default="F6", Mode="Toggle", Callback=function(active,keyName) end})` → `:Get()`, `:Set(keyName, fireChangeCallback)`
 - `tab:CreateTextArea({Name="JSON", Height=120})` → `:Get()`, `:Set(text)`
 
-Window methods: `:SetTheme(name)`, `:SetAccentColor(Color3 or hex)`, `:SetRain(enabled, density, speed)`, `:Notify(text, kind)`, `:Toast({Title,Content,Duration})`, `:SetMinimized(bool)`, `:SetHidden(bool)`, `:SelectTab(tab)`, `:Destroy()`. Most interactive component handles expose `:SetVisible(bool)`, `:SetDisabled(bool)` and `:Destroy()`.
+Window methods: `:SetSize(width,height)` or `:SetSize(Vector2)`, `:SetTheme(name)`, `:SetAccentColor(Color3 or hex)`, `:SetRain(enabled, density, speed)`, `:Notify(text, kind)`, `:Toast({Title,Content,Duration})`, `:SetMinimized(bool)`, `:SetHidden(bool)`, `:SelectTab(tab)`, `:Destroy()`. Most interactive component handles expose `:SetVisible(bool)`, `:SetDisabled(bool)` and `:Destroy()`.
 
 ## Configuration API
 
@@ -135,6 +135,16 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 ## License
 
 MIT. See `LICENSE`.
+## v0.4.1 usability pass
+
+- **Resize:** drag the bottom-right grip, or call `window:SetSize(width,height)`.
+- **Viewport:** the window clamps to available screen space and uses a narrower sidebar on small screens. Existing tab and component APIs are unchanged.
+- **Dropdowns:** caps visible option controls at 50 per search, supports Enter to pick the first match and retains scrolling during multi-select.
+- **Inputs:** numeric fields restore the last valid value when invalid and show an explanatory warning; disabled and focus feedback is clearer.
+- **Paragraphs:** automatically expand with wrapped text unless `Height` is specified.
+- **Matrix rendering:** pauses while hidden/minimized and grows its columns as the window is enlarged.
+- **Testing:** `examples/basic.luau` includes a resize button, numeric-input assertions, auto-height paragraph and large-dropdown smoke test. Actual Roblox visual testing remains necessary.
+
 ## v0.4 visual refinement
 
 - A thinner 5 px default bezel, with the original Matrix rain retained as a theme accent.
