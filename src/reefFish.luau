@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.4.1-alpha
+-- reefFish UI Lib v0.4.2-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.1-alpha"}
+local Lib={Version="0.4.2-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -242,7 +242,7 @@ function Window:_viewport()
  return camera and camera.ViewportSize or Vector2.new(1280,720)
 end
 function Window:_clampPosition()
- if not self.root then return end
+ if self.destroyed or not self.root then return end
  local viewport=self:_viewport()
  local size=self.root.Size
  local x=self.root.Position.X.Scale*viewport.X+self.root.Position.X.Offset
@@ -256,12 +256,13 @@ function Window:_clampPosition()
  )
 end
 function Window:_layout()
- if not self.root then return end
+ if self.destroyed or not self.root then return end
  local viewport=self:_viewport()
- local maxWidth=math.max(200,math.floor(viewport.X-16))
- local maxHeight=math.max(170,math.floor(viewport.Y-16))
- self.width=math.clamp(self.width,math.min(330,maxWidth),maxWidth)
- self.height=math.clamp(self.height,math.min(250,maxHeight),maxHeight)
+ local maxWidth=math.max(140,math.floor(viewport.X-16))
+ local maxHeight=math.max(130,math.floor(viewport.Y-16))
+ -- Preserve intended dimensions when the viewport temporarily gets smaller.
+ self.width=math.clamp(self.requestedWidth,math.min(330,maxWidth),maxWidth)
+ self.height=math.clamp(self.requestedHeight,math.min(250,maxHeight),maxHeight)
  local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
  self.root.Size=UDim2.fromOffset(self.width,shownHeight)
  if self.nav and self.content then
@@ -273,14 +274,26 @@ function Window:_layout()
   if self._navDivider then self._navDivider.Position=UDim2.fromOffset(navWidth,0) end
  end
  if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
+ if self._status then self._status.Visible=not self.minimized end
+ if self._toastLayer then
+  local toastWidth=math.min(280,math.max(120,viewport.X-20))
+  local toastHeight=math.min(225,math.max(70,viewport.Y-26))
+  self._toastLayer.Size=UDim2.fromOffset(toastWidth,toastHeight)
+  self._toastLayer.Position=UDim2.new(1,-toastWidth-10,1,-toastHeight-12)
+ end
  if self._ensureRainColumns then self._ensureRainColumns(self.width) end
  self:_clampPosition()
 end
 function Window:SetSize(width,height)
+ if self.destroyed then return Vector2.new(self.width,self.height) end
  if self._closeDropdown then self._closeDropdown() end
  if typeof(width)=="Vector2" then height=width.Y width=width.X end
- if type(width)=="number" and width==width then self.width=math.floor(width+.5) end
- if type(height)=="number" and height==height then self.height=math.floor(height+.5) end
+ if type(width)=="number" and width==width and width>0 and width<10000 then
+  self.requestedWidth=math.floor(width+.5)
+ end
+ if type(height)=="number" and height==height and height>0 and height<10000 then
+  self.requestedHeight=math.floor(height+.5)
+ end
  self:_layout()
  return Vector2.new(self.width,self.height)
 end
@@ -307,6 +320,10 @@ function Window:Destroy()
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
  self._bindingCapture=nil
+ if self._viewportConnection then
+  self._viewportConnection:Disconnect()
+  self._viewportConnection=nil
+ end
  -- Flush any queued autosaves before disconnecting.
  for kind,due in pairs(self._autosaveDue) do
   local name=self._autosaveTargets[kind]
@@ -316,6 +333,13 @@ function Window:Destroy()
   end
  end
  for _,c in ipairs(self._connections) do c:Disconnect() end
+ if self._controlConnections then
+  for _,bucket in pairs(self._controlConnections) do
+   for _,connection in ipairs(bucket) do connection:Disconnect() end
+  end
+  table.clear(self._controlConnections)
+ end
+ table.clear(self.flags)
  self.screen:Destroy()
  if self._registry and self._registry.__reefFishWindow==self then
   self._registry.__reefFishWindow=nil
@@ -1508,14 +1532,18 @@ function Lib:CreateWindow(o)
  local player=Players.LocalPlayer
  assert(player,"reefFish must run in a client LocalScript")
  local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
+ local initialWidth=math.max(330,o.Size and o.Size.X.Offset or 560)
+ local initialHeight=math.max(250,o.Size and o.Size.Y.Offset or 380)
  local w=setmetatable({
-  width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 380),
+  width=initialWidth,height=initialHeight,
+  requestedWidth=initialWidth,requestedHeight=initialHeight,
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
   rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
-  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16)
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16),
+  _controlConnections={}
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
  if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
@@ -1672,7 +1700,7 @@ function Lib:CreateWindow(o)
   dragging=true
   dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
   dragStart=i.Position
-  startPos=w.root.Position
+  startPos=w.root.AbsolutePosition
  end)
  w._connections[#w._connections+1]=w._resizeGrip.InputBegan:Connect(function(i)
   if not isPointer(i) or w.minimized or dragging or w.destroyed then return end
@@ -1693,7 +1721,7 @@ function Lib:CreateWindow(o)
   local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
   if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
    local diff=i.Position-dragStart
-   w.root.Position=UDim2.fromOffset(startPos.X.Offset+diff.X,startPos.Y.Offset+diff.Y)
+   w.root.Position=UDim2.fromOffset(startPos.X+diff.X,startPos.Y+diff.Y)
    w:_clampPosition()
   elseif resizing and (mouseMove and resizeTouch==nil or i==resizeTouch) then
    local diff=i.Position-resizeStart
