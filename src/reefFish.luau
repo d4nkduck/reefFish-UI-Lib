@@ -292,12 +292,38 @@ function Window:_layout()
  local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
  self.root.Size=UDim2.fromOffset(self.width,shownHeight)
  if self.nav and self.content then
-  local navWidth=math.clamp(math.floor(self.width*.26),95,155)
-  if self.width<390 then navWidth=90 end
-  self.nav.Size=UDim2.new(0,navWidth,1,0)
-  self.content.Position=UDim2.fromOffset(navWidth+3,0)
-  self.content.Size=UDim2.new(1,-navWidth-3,1,0)
-  if self._navDivider then self._navDivider.Position=UDim2.fromOffset(navWidth,0) end
+  local compact=self.width<420
+  self._compactNav=compact
+  if compact then
+   -- Mobile: horizontal, scrollable tab rail rather than a narrow sidebar.
+   self.nav.Position=UDim2.fromOffset(0,0)
+   self.nav.Size=UDim2.new(1,0,0,42)
+   self.nav.ScrollingDirection=Enum.ScrollingDirection.X
+   self.nav.AutomaticCanvasSize=Enum.AutomaticSize.X
+   if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Horizontal end
+   self.content.Position=UDim2.fromOffset(0,43)
+   self.content.Size=UDim2.new(1,0,1,-43)
+   if self._navDivider then
+    self._navDivider.Position=UDim2.fromOffset(0,42)
+    self._navDivider.Size=UDim2.new(1,0,0,1)
+   end
+  else
+   local navWidth=math.clamp(math.floor(self.width*.26),105,155)
+   self.nav.Position=UDim2.fromOffset(0,0)
+   self.nav.Size=UDim2.new(0,navWidth,1,0)
+   self.nav.ScrollingDirection=Enum.ScrollingDirection.Y
+   self.nav.AutomaticCanvasSize=Enum.AutomaticSize.Y
+   if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Vertical end
+   self.content.Position=UDim2.fromOffset(navWidth+3,0)
+   self.content.Size=UDim2.new(1,-navWidth-3,1,0)
+   if self._navDivider then
+    self._navDivider.Position=UDim2.fromOffset(navWidth,0)
+    self._navDivider.Size=UDim2.new(0,1,1,0)
+   end
+  end
+  for _,tab in ipairs(self.tabs) do
+   tab.button.Size=compact and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32)
+  end
  end
  if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
  if self._status then self._status.Visible=not self.minimized end
@@ -374,7 +400,8 @@ end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
-  Text="  "..tostring(name),Size=UDim2.new(1,-10,0,32),
+  Text="  "..tostring(name),
+  Size=self._compactNav and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32),
   Font=Enum.Font.GothamMedium,TextSize=12,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
@@ -1080,15 +1107,15 @@ function Tab:CreateColorPicker(o)
  local rgbFields={}
  local rgbCaptions={}
  for channel,name in ipairs({"R","G","B"}) do
-  local x=9+(channel-1)*76
+  local fraction=(channel-1)/3
   local caption=make("TextLabel",{
-   Position=UDim2.fromOffset(x,191),Size=UDim2.fromOffset(16,25),
+   Position=UDim2.new(fraction,10,0,191),Size=UDim2.fromOffset(16,25),
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
    Font=Enum.Font.Gotham,TextSize=12
   },f)
   rgbCaptions[channel]=caption
   local field=make("TextBox",{
-   Position=UDim2.fromOffset(x+18,191),Size=UDim2.fromOffset(50,25),
+   Position=UDim2.new(fraction,28,0,191),Size=UDim2.new(1/3,-34,0,25),
    BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
    Font=Enum.Font.Gotham,TextSize=12,BorderSizePixel=0,
    ClearTextOnFocus=false,Text="0"
@@ -1682,7 +1709,7 @@ function Lib:CreateWindow(o)
   PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,6),
   PaddingRight=UDim.new(0,2),PaddingBottom=UDim.new(0,8)
  },w.nav)
- make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
+ w._navLayout=make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
  local navDivider=make("Frame",{
   Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
   BorderSizePixel=0,ZIndex=7,Active=false
