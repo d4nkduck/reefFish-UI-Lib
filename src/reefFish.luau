@@ -80,6 +80,16 @@ local function parseColor(value)
  end
  return nil
 end
+local function imageAsset(value)
+ local id=value
+ if type(id)=="number" and id>0 then id=tostring(math.floor(id)) end
+ if type(id)=="string" and id:match("^%d+$") then id="rbxassetid://"..id end
+ if type(id)=="string" and (
+  id:match("^rbxassetid://%d+$")
+  or id:match("^rbxasset://[%w_/%-%.]+$")
+ ) then return id end
+ return nil
+end
 local function packValue(v)
  if typeof(v)=="Color3" then
   return {__reefFishType="Color3",R=v.R,G=v.G,B=v.B}
@@ -753,14 +763,24 @@ function Window:ToggleSearch()
 end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
+ local iconId=imageAsset(type(opts)=="table" and opts.Icon or nil)
  local button=make("TextButton",{
-  Text="  "..tostring(name),LayoutOrder=#self.tabs+1,
+  Text=(iconId and "       " or "  ")..tostring(name),LayoutOrder=#self.tabs+1,
   Size=self._compactNav and UDim2.fromOffset(124,36) or UDim2.new(1,-10,0,36),
   Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
  },self.nav)
  round(button,Design.radius.control)
+ local iconLabel
+ if iconId then
+  iconLabel=make("ImageLabel",{
+   Name="TabIcon",BackgroundTransparency=1,Image=iconId,
+   Size=UDim2.fromOffset(19,19),Position=UDim2.fromOffset(10,8),
+   ScaleType=Enum.ScaleType.Fit,BorderSizePixel=0,ZIndex=7
+  },button)
+  pcall(function()iconLabel.ResampleMode=Enum.ResamplerMode.Pixelated end)
+ end
  local indicator=make("Frame",{
   Position=UDim2.fromOffset(0,8),Size=UDim2.fromOffset(3,20),
   BorderSizePixel=0,Visible=false,Active=false
@@ -779,6 +799,25 @@ function Window:CreateTab(opts)
  },page)
  make("UIListLayout",{Padding=UDim.new(0,Design.space.sm),SortOrder=Enum.SortOrder.LayoutOrder},page)
  local t=setmetatable({window=self,button=button,page=page,indicator=indicator,name=tostring(name)},Tab)
+ function t:SetIcon(asset)
+  local id=imageAsset(asset)
+  if not id then
+   if iconLabel then iconLabel:Destroy() iconLabel=nil end
+   button.Text="  "..self.name
+   return false
+  end
+  if not iconLabel then
+   iconLabel=make("ImageLabel",{
+    Name="TabIcon",BackgroundTransparency=1,BorderSizePixel=0,
+    Size=UDim2.fromOffset(19,19),Position=UDim2.fromOffset(10,8),
+    ScaleType=Enum.ScaleType.Fit,ZIndex=7
+   },button)
+   pcall(function()iconLabel.ResampleMode=Enum.ResamplerMode.Pixelated end)
+  end
+  iconLabel.Image=id
+  button.Text="       "..self.name
+  return true
+ end
  self:_theme(button,"TextColor3","muted")
  self:_theme(button,"BackgroundColor3","bg")
  self.tabs[#self.tabs+1]=t
@@ -2320,20 +2359,14 @@ function Lib:CreateWindow(o)
  },top)
  pcall(function()fish.ResampleMode=Enum.ResamplerMode.Pixelated end)
  w._fishIcon=fish
- local function setLogo(asset)
-  local id=asset
-  if type(asset)=="number" then id=tostring(math.floor(asset)) end
-  if type(id)=="string" and id:match("^%d+$") then id="rbxassetid://"..id end
-  local valid=type(id)=="string" and (
-   id:match("^rbxassetid://%d+$")~=nil
-   or id:match("^rbxasset://[%w_/%-%.]+$")~=nil
-  )
-  fish.Image=valid and id or ""
-  fish.Visible=valid and true or false
-  return valid==true
- end
  function w:SetIcon(asset)
-  return setLogo(asset)
+  local id=imageAsset(asset)
+  fish.Image=id or ""
+  fish.Visible=id~=nil
+  local left=fish.Visible and 44 or 14
+  if w._title then w._title.Position=UDim2.fromOffset(left,6) end
+  if w._subtitle then w._subtitle.Position=UDim2.fromOffset(left,30) end
+  return id~=nil
  end
  w:SetIcon(o.Icon or o.IconAsset or Lib.DefaultIconAsset)
  local caption=make("TextLabel",{
@@ -2352,6 +2385,7 @@ function Lib:CreateWindow(o)
  w:_theme(subtitle,"TextColor3","muted")
  w._title=caption
  w._subtitle=subtitle
+ w:SetIcon(o.Icon or o.IconAsset or Lib.DefaultIconAsset)
  local searchBtn=make("TextButton",{
   Name="SearchSettings",Text="⌕",Size=UDim2.fromOffset(30,28),
   Position=UDim2.new(1,-111,0,11),BorderSizePixel=0,
