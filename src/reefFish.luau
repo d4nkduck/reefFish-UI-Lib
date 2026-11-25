@@ -163,6 +163,7 @@ function Window:SetAccentColor(value)
   if bound[3]=="accent" and bound[1].Parent then bound[1][bound[2]]=color end
  end
  for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ if self.active then self:SelectTab(self.active) end
  self:_markChanged("appearance")
  return true
 end
@@ -189,24 +190,24 @@ function Window:Toast(info)
   Size=UDim2.new(1,0,0,58),BackgroundColor3=self.colors.panel,
   BackgroundTransparency=1,BorderSizePixel=0,ZIndex=180
  },self._toastLayer)
- round(frame,4)
- make("UIStroke",{Color=self.colors.border,Thickness=1,Transparency=.2},frame)
+ round(frame,6)
+ make("UIStroke",{Color=self.colors.muted,Thickness=1,Transparency=.65},frame)
  local heading=make("TextLabel",{
-  Text="> "..title,TextColor3=self.colors.accent,BackgroundTransparency=1,
+  Text=title,TextColor3=self.colors.accent,BackgroundTransparency=1,
   Position=UDim2.fromOffset(8,3),Size=UDim2.new(1,-26,0,22),
-  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=13,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=12,
   TextTransparency=1,ZIndex=181
  },frame)
  local body=make("TextLabel",{
   Text=content,TextColor3=self.colors.text,BackgroundTransparency=1,
   Position=UDim2.fromOffset(8,23),Size=UDim2.new(1,-16,0,31),
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
-  TextWrapped=true,Font=Enum.Font.Code,TextSize=12,TextTransparency=1,ZIndex=181
+  TextWrapped=true,Font=Enum.Font.Gotham,TextSize=11,TextTransparency=1,ZIndex=181
  },frame)
  local close=make("TextButton",{
   Text="×",TextColor3=self.colors.muted,BackgroundTransparency=1,
   Position=UDim2.new(1,-25,0,1),Size=UDim2.fromOffset(23,22),
-  Font=Enum.Font.Code,TextSize=16,ZIndex=182
+  Font=Enum.Font.Gotham,TextSize=18,ZIndex=182
  },frame)
  table.insert(self._toasts,frame)
  local function dismiss()
@@ -225,7 +226,7 @@ function Window:Toast(info)
  return {Dismiss=dismiss}
 end
 function Window:Notify(msg,kind)
- self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
+ self._status.Text=string.upper(tostring(kind or "INFO")).."  •  "..tostring(msg)
  if self.enableToasts then
   self:Toast({Title=kind or "INFO",Content=tostring(msg),Duration=3.5})
  end
@@ -1013,20 +1014,20 @@ end
 function Tab:CreateKeybind(o)
  o=o or {}
  local w=self.window
- local f=self:_base(43)
+ local f=self:_base(40)
  local mode=o.Mode or "Toggle"
  if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
  local label=make("TextLabel",{
-  Text=tostring(o.Name or "Keybind"),Font=Enum.Font.Code,
-  TextSize=14,BackgroundTransparency=1,
+  Text=tostring(o.Name or "Keybind"),Font=Enum.Font.GothamMedium,
+  TextSize=12,BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,
   Position=UDim2.fromOffset(8,0),Size=UDim2.new(.56,-8,1,0)
  },f)
  w:_theme(label,"TextColor3","text")
  local button=make("TextButton",{
-  Size=UDim2.new(.42,-8,0,30),Position=UDim2.new(.58,0,0,7),
-  BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
-  Text="[ NONE ]",Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0
+  Size=UDim2.new(.42,-8,0,28),Position=UDim2.new(.58,0,0,6),
+  BackgroundColor3=w.colors.raised,TextColor3=w.colors.accent,
+  Text="None",Font=Enum.Font.GothamMedium,TextSize=12,BorderSizePixel=0
  },f)
  round(button,3)
  local selected=nil
@@ -1034,7 +1035,7 @@ function Tab:CreateKeybind(o)
  local disabled=false
  local handle={}
  local function redraw()
-  button.Text="["..(selected or "NONE").."]"
+  button.Text=selected or "None"
  end
  function handle:Get()return selected or "None"end
  function handle:Set(candidate,notify)
@@ -1075,7 +1076,7 @@ function Tab:CreateKeybind(o)
  w._connections[#w._connections+1]=button.MouseButton1Click:Connect(function()
   if disabled then return end
   w._bindingCapture=handle
-  button.Text="[ PRESS KEY ]"
+  button.Text="Press a key..."
  end)
  handle:Set(o.Default or "None")
  table.insert(w._keybinds,handle)
@@ -1092,12 +1093,12 @@ function Tab:CreateTextArea(o)
  local label=make("TextLabel",{
   Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
   Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
-  Font=Enum.Font.Code,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
  },f)
  w:_theme(label,"TextColor3","accent")
  local box=make("TextBox",{
   Size=UDim2.new(1,-12,1,-30),Position=UDim2.fromOffset(6,26),
-  BackgroundColor3=w.colors.panel,TextColor3=w.colors.text,
+  BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
   PlaceholderColor3=w.colors.muted,Text=tostring(o.Default or ""),
   PlaceholderText=tostring(o.Placeholder or "Paste JSON here..."),
   ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,
