@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.3.0-alpha
+-- reefFish UI Lib v0.4.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.3.0-alpha"}
+local Lib={Version="0.4.0-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -20,7 +20,7 @@ local function make(class,props,parent)
  x.Parent=parent
  return x
 end
-local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 4)},x) end
+local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 6)},x) end
 local function fire(fn,...)
  if type(fn)=="function" then local ok,err=pcall(fn,...) if not ok then warn("[reefFish]",err) end end
 end
@@ -95,26 +95,33 @@ local Tab={} Tab.__index=Tab
 -- Small, central interaction-state engine: no per-control animation loops.
 function Window:_feedback(hitbox,surface)
  local state="normal"
- local function refresh()
+ local currentTween
+ local function refresh(animate)
   if not surface.Parent then return end
-  local base=self.colors.raised
+  local base=self.colors.panel
+  local target=base
   if state=="hover" then
-   surface.BackgroundColor3=base:Lerp(self.colors.accent,.16)
+   target=base:Lerp(self.colors.accent,.08)
   elseif state=="pressed" then
-   surface.BackgroundColor3=base:Lerp(self.colors.accent,.32)
+   target=base:Lerp(self.colors.accent,.16)
+  end
+  if currentTween then currentTween:Cancel() currentTween=nil end
+  if animate then
+   currentTween=TweenService:Create(surface,TweenInfo.new(.12,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=target})
+   currentTween:Play()
   else
-   surface.BackgroundColor3=base
+   surface.BackgroundColor3=target
   end
  end
- self._feedbackRefresh[#self._feedbackRefresh+1]=refresh
+ self._feedbackRefresh[#self._feedbackRefresh+1]=function()refresh(false)end
  local function add(signal,fn)
   self._connections[#self._connections+1]=signal:Connect(fn)
  end
- add(hitbox.MouseEnter,function()state="hover" refresh()end)
- add(hitbox.MouseLeave,function()state="normal" refresh()end)
- add(hitbox.MouseButton1Down,function()state="pressed" refresh()end)
- add(hitbox.MouseButton1Up,function()state="hover" refresh()end)
- refresh()
+ add(hitbox.MouseEnter,function()state="hover" refresh(true)end)
+ add(hitbox.MouseLeave,function()state="normal" refresh(true)end)
+ add(hitbox.MouseButton1Down,function()state="pressed" refresh(true)end)
+ add(hitbox.MouseButton1Up,function()state="hover" refresh(true)end)
+ refresh(false)
 end
 function Window:_markChanged(kind)
  if self._importing then return end
@@ -122,7 +129,7 @@ function Window:_markChanged(kind)
  if name then self._autosaveDue[kind]=os.clock()+1 end
 end
 function Window:SetBorderThickness(value)
- local n=math.clamp(math.floor(tonumber(value) or self.borderThickness),9,16)
+ local n=math.clamp(math.floor(tonumber(value) or self.borderThickness),3,16)
  self.borderThickness=n
  if self.inner then
   self.inner.Position=UDim2.fromOffset(n,n)
@@ -156,6 +163,7 @@ function Window:SetAccentColor(value)
   if bound[3]=="accent" and bound[1].Parent then bound[1][bound[2]]=color end
  end
  for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ if self.active then self:SelectTab(self.active) end
  self:_markChanged("appearance")
  return true
 end
@@ -182,24 +190,24 @@ function Window:Toast(info)
   Size=UDim2.new(1,0,0,58),BackgroundColor3=self.colors.panel,
   BackgroundTransparency=1,BorderSizePixel=0,ZIndex=180
  },self._toastLayer)
- round(frame,4)
- make("UIStroke",{Color=self.colors.border,Thickness=1,Transparency=.2},frame)
+ round(frame,6)
+ make("UIStroke",{Color=self.colors.muted,Thickness=1,Transparency=.65},frame)
  local heading=make("TextLabel",{
-  Text="> "..title,TextColor3=self.colors.accent,BackgroundTransparency=1,
+  Text=title,TextColor3=self.colors.accent,BackgroundTransparency=1,
   Position=UDim2.fromOffset(8,3),Size=UDim2.new(1,-26,0,22),
-  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=13,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBold,TextSize=12,
   TextTransparency=1,ZIndex=181
  },frame)
  local body=make("TextLabel",{
   Text=content,TextColor3=self.colors.text,BackgroundTransparency=1,
   Position=UDim2.fromOffset(8,23),Size=UDim2.new(1,-16,0,31),
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,
-  TextWrapped=true,Font=Enum.Font.Code,TextSize=12,TextTransparency=1,ZIndex=181
+  TextWrapped=true,Font=Enum.Font.Gotham,TextSize=11,TextTransparency=1,ZIndex=181
  },frame)
  local close=make("TextButton",{
   Text="×",TextColor3=self.colors.muted,BackgroundTransparency=1,
   Position=UDim2.new(1,-25,0,1),Size=UDim2.fromOffset(23,22),
-  Font=Enum.Font.Code,TextSize=16,ZIndex=182
+  Font=Enum.Font.Gotham,TextSize=18,ZIndex=182
  },frame)
  table.insert(self._toasts,frame)
  local function dismiss()
@@ -218,7 +226,7 @@ function Window:Toast(info)
  return {Dismiss=dismiss}
 end
 function Window:Notify(msg,kind)
- self._status.Text="["..string.upper(tostring(kind or "INFO")).."] "..tostring(msg)
+ self._status.Text=string.upper(tostring(kind or "INFO")).."  •  "..tostring(msg)
  if self.enableToasts then
   self:Toast({Title=kind or "INFO",Content=tostring(msg),Duration=3.5})
  end
@@ -236,9 +244,14 @@ function Window:SetMinimized(value)
  self.root.Size=UDim2.fromOffset(self.width,self.minimized and (42+self.borderThickness*2) or self.height)
 end
 function Window:SelectTab(tab)
+ if not tab then return end
+ if self._closeDropdown then self._closeDropdown() end
  for _,t in ipairs(self.tabs) do
-  t.page.Visible=(t==tab)
-  t.button.BackgroundColor3=(t==tab) and self.colors.raised or self.colors.panel
+  local selected=t==tab
+  t.page.Visible=selected
+  t.button.BackgroundColor3=selected and self.colors.raised or self.colors.bg
+  t.button.TextColor3=selected and self.colors.accent or self.colors.muted
+  if t.indicator then t.indicator.Visible=selected end
  end
  self.active=tab
 end
@@ -263,34 +276,68 @@ function Window:Destroy()
 end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
- local button=make("TextButton",{Text="> "..tostring(name),Size=UDim2.new(1,-8,0,34),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0,AutoButtonColor=false},self.nav)
- local page=make("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScrollBarThickness=4,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=false,BorderSizePixel=0},self.content)
- make("UIPadding",{PaddingTop=UDim.new(0,8),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)},page)
- make("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},page)
- local t=setmetatable({window=self,button=button,page=page},Tab)
- self:_theme(button,"TextColor3","accent")
- self:_theme(button,"BackgroundColor3","panel")
+ local button=make("TextButton",{
+  Text="  "..tostring(name),Size=UDim2.new(1,-10,0,32),
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  BorderSizePixel=0,AutoButtonColor=false
+ },self.nav)
+ round(button,5)
+ local indicator=make("Frame",{
+  Position=UDim2.fromOffset(0,7),Size=UDim2.fromOffset(2,18),
+  BorderSizePixel=0,Visible=false,Active=false
+ },button)
+ round(indicator,2)
+ self:_theme(indicator,"BackgroundColor3","accent")
+ local page=make("ScrollingFrame",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+  ScrollBarThickness=3,ScrollBarImageColor3=self.colors.muted,
+  AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),
+  Visible=false,BorderSizePixel=0
+ },self.content)
+ make("UIPadding",{
+  PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),
+  PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)
+ },page)
+ make("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder},page)
+ local t=setmetatable({window=self,button=button,page=page,indicator=indicator},Tab)
+ self:_theme(button,"TextColor3","muted")
+ self:_theme(button,"BackgroundColor3","bg")
  self.tabs[#self.tabs+1]=t
  self._connections[#self._connections+1]=button.MouseButton1Click:Connect(function()self:SelectTab(t)end)
+ self._connections[#self._connections+1]=button.MouseEnter:Connect(function()
+  if self.active~=t then button.BackgroundColor3=self.colors.panel end
+ end)
+ self._connections[#self._connections+1]=button.MouseLeave:Connect(function()
+  if self.active~=t then button.BackgroundColor3=self.colors.bg end
+ end)
  if #self.tabs==1 then self:SelectTab(t) end
  return t
 end
 function Tab:_base(height)
  local w=self.window
  local frame=make("Frame",{Size=UDim2.new(1,-4,0,height),BorderSizePixel=0},self.page)
- round(frame,4) w:_theme(frame,"BackgroundColor3","raised")
+ round(frame,6)
+ w:_theme(frame,"BackgroundColor3","panel")
  return frame
 end
 function Tab:CreateSection(name)
- local f=self:_base(27)
- local l=make("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-12,1,0),Position=UDim2.fromOffset(6,0),Text=tostring(name),Font=Enum.Font.Code,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left},f)
- self.window:_theme(l,"TextColor3","accent")
+ -- Sections are quiet dividers, not another raised card.
+ local f=make("Frame",{
+  Size=UDim2.new(1,-4,0,27),BackgroundTransparency=1,BorderSizePixel=0
+ },self.page)
+ local l=make("TextLabel",{
+  BackgroundTransparency=1,Size=UDim2.new(1,-12,1,0),
+  Position=UDim2.fromOffset(4,0),Text=tostring(name),
+  Font=Enum.Font.GothamBold,TextSize=11,
+  TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ self.window:_theme(l,"TextColor3","muted")
  return f
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
  local f=self:_base(32)
- local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(8,0),Size=UDim2.new(1,-16,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=14,TextWrapped=true},f)
+ local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,TextSize=12,TextWrapped=true},f)
  self.window:_theme(l,"TextColor3","text")
  return {
   SetText=function(_,v)l.Text=tostring(v)end,
@@ -300,37 +347,84 @@ function Tab:CreateLabel(o)
  }
 end
 function Tab:CreateButton(o)
+ o=o or {}
  local w=self.window
- local f=self:_base(36)
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Text="[ "..tostring(o.Name or "Button").." ]",Font=Enum.Font.Code,TextSize=15},f)
- w:_theme(b,"TextColor3","accent")
+ local f=self:_base(35)
+ local b=make("TextButton",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
+  Text="  "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
+  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ local arrow=make("TextLabel",{
+  Text="›",BackgroundTransparency=1,
+  Size=UDim2.fromOffset(18,30),Position=UDim2.new(1,-26,0,2),
+  Font=Enum.Font.Gotham,TextSize=20
+ },f)
+ w:_theme(b,"TextColor3","text")
+ w:_theme(arrow,"TextColor3","muted")
  w:_feedback(b,f)
  local disabled=false
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
  return {
-  SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end,
+  SetDisabled=function(_,v)
+   disabled=v==true
+   b.TextTransparency=disabled and .55 or 0
+   arrow.TextTransparency=disabled and .55 or 0
+  end,
   SetVisible=function(_,v)f.Visible=v~=false end,
   Destroy=function()f:Destroy()end
  }
 end
 function Tab:CreateToggle(o)
+ o=o or {}
  local w=self.window
- local f=self:_base(37)
+ local f=self:_base(39)
  local value=o.Default==true
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local b=make("TextButton",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
+  Text="  "..tostring(o.Name or "Toggle"),Font=Enum.Font.GothamMedium,
+  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
  w:_theme(b,"TextColor3","text")
+ local track=make("Frame",{
+  Size=UDim2.fromOffset(34,19),Position=UDim2.new(1,-45,.5,-9),
+  BorderSizePixel=0,BackgroundColor3=w.colors.raised,Active=false
+ },f)
+ round(track,10)
+ local knob=make("Frame",{
+  Size=UDim2.fromOffset(13,13),Position=UDim2.fromOffset(3,3),
+  BorderSizePixel=0,BackgroundColor3=w.colors.muted,Active=false
+ },track)
+ round(knob,7)
  w:_feedback(b,f)
  local disabled=false
- local function render()b.Text="  ["..(value and "X" or " ").."] "..tostring(o.Name or "Toggle")end
+ local function render(animate)
+  local targetColor=value and w.colors.accent or w.colors.raised
+  local knobColor=value and w.colors.bg or w.colors.muted
+  local targetPosition=UDim2.fromOffset(value and 18 or 3,3)
+  if animate then
+   TweenService:Create(track,TweenInfo.new(.15),{BackgroundColor3=targetColor}):Play()
+   TweenService:Create(knob,TweenInfo.new(.15),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
+  else
+   track.BackgroundColor3=targetColor
+   knob.Position=targetPosition
+   knob.BackgroundColor3=knobColor
+  end
+ end
+ w._feedbackRefresh[#w._feedbackRefresh+1]=function()render(false)end
  local handle={}
- function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  b.TextTransparency=disabled and .55 or 0
+  track.BackgroundTransparency=disabled and .45 or 0
+ end
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  function handle:Get()return value end
  function handle:Set(v,notify)
   if type(v)~="boolean" then return false end
   value=v
-  render()
+  render(true)
   if notify then
    if o.Flag then w:_markChanged("game") end
    fire(o.Callback,value)
@@ -341,69 +435,105 @@ function Tab:CreateToggle(o)
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
   if not disabled then handle:Set(not value,true) end
  end)
- render() return handle
+ render(false)
+ return handle
 end
 function Tab:CreateSlider(o)
+ o=o or {}
  local w=self.window
- local f=self:_base(55)
+ local f=self:_base(54)
  local min,max=tonumber(o.Min) or 0,tonumber(o.Max) or 100
  if max<=min then max=min+1 end
  local inc=math.max(tonumber(o.Increment) or 1,0.000001)
  local value=math.clamp(tonumber(o.Default) or min,min,max)
- local name=make("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
- w:_theme(name,"TextColor3","text")
- local bar=make("TextButton",{Size=UDim2.new(1,-16,0,8),Position=UDim2.new(0,8,0,36),BorderSizePixel=0,Text="",AutoButtonColor=false},f)
- w:_theme(bar,"BackgroundColor3","panel")
- round(bar,4)
- local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},bar)
+ local label=make("TextLabel",{
+  Text=tostring(o.Name or "Slider"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-98,0,26),Position=UDim2.fromOffset(10,2),
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ w:_theme(label,"TextColor3","text")
+ local valueLabel=make("TextLabel",{
+  BackgroundTransparency=1,Size=UDim2.fromOffset(77,26),
+  Position=UDim2.new(1,-87,0,2),Font=Enum.Font.GothamMedium,
+  TextSize=12,TextXAlignment=Enum.TextXAlignment.Right
+ },f)
+ w:_theme(valueLabel,"TextColor3","accent")
+ local bar=make("TextButton",{
+  Size=UDim2.new(1,-22,0,18),Position=UDim2.fromOffset(11,30),
+  BackgroundTransparency=1,BorderSizePixel=0,Text="",AutoButtonColor=false
+ },f)
+ local track=make("Frame",{
+  Position=UDim2.fromOffset(0,6),Size=UDim2.new(1,0,0,6),
+  BorderSizePixel=0,Active=false
+ },bar)
+ w:_theme(track,"BackgroundColor3","raised")
+ round(track,3)
+ local fill=make("Frame",{Size=UDim2.fromScale(0,1),BorderSizePixel=0},track)
  w:_theme(fill,"BackgroundColor3","accent")
- round(fill,4)
+ round(fill,3)
  local thumb=make("Frame",{
   AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(0,.5),
-  Size=UDim2.fromOffset(14,14),BorderSizePixel=0,Active=false
- },bar)
+  Size=UDim2.fromOffset(12,12),BorderSizePixel=0,Active=false
+ },track)
  w:_theme(thumb,"BackgroundColor3","accent")
- round(thumb,7)
+ round(thumb,6)
  local handle={}
  local disabled=false
- function handle:SetDisabled(v)disabled=v==true f.BackgroundTransparency=disabled and .5 or 0 end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  f.BackgroundTransparency=disabled and .45 or 0
+ end
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  local function render()
-  name.Text=tostring(o.Name or "Slider").."  "..tostring(value)
+  valueLabel.Text=tostring(value)
   local progress=(value-min)/(max-min)
   fill.Size=UDim2.fromScale(progress,1)
   thumb.Position=UDim2.fromScale(progress,.5)
  end
  function handle:Get()return value end
  function handle:Set(v,notify)
-  if type(v)~="number" then return end
+  if type(v)~="number" then return false end
   value=math.clamp(min+math.floor(((v-min)/inc)+.5)*inc,min,max)
   render()
   if notify then
    if o.Flag then w:_markChanged("game") end
    fire(o.Callback,value)
   end
+  return true
  end
  local dragging=false
+ local function updateFromPosition(pos)
+  if disabled or not f.Parent then return end
+  local fraction=math.clamp((pos.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
+  handle:Set(min+fraction*(max-min),true)
+ end
  w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
-  if not disabled and (i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch) then dragging=true end
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+   if not disabled then
+    dragging=true
+    updateFromPosition(i.Position)
+   end
+  end
  end)
  w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
  end)
  w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if not disabled and dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
-   handle:Set(min+math.clamp((i.Position.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)*(max-min),true)
+  if not f.Parent then dragging=false return end
+  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+   updateFromPosition(i.Position)
   end
  end)
- w:_register(o.Flag,handle) render() return handle
+ w:_register(o.Flag,handle)
+ render()
+ return handle
 end
 function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
  local w=self.window
- local f=self:_base(70)
+ local f=self:_base(66)
 
  local opts=o.Options or {}
  local multi=o.Multi==true
@@ -418,15 +548,30 @@ function Tab:CreateDropdown(o)
  else
   value=table.find(opts,o.Default) and o.Default or opts[1]
  end
- local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
- local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0,AutoButtonColor=false},f)
- w:_theme(b,"TextColor3","accent")
- w:_theme(b,"BackgroundColor3","panel")
- w:_feedback(b,f)
+ local b=make("TextButton",{
+  Size=UDim2.new(1,-20,0,30),Position=UDim2.fromOffset(10,29),
+  Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  TextTruncate=Enum.TextTruncate.AtEnd,
+  BorderSizePixel=0,AutoButtonColor=false
+ },f)
+ round(b,5)
+ w:_theme(b,"TextColor3","text")
+ w:_theme(b,"BackgroundColor3","raised")
+ local chevron=make("TextLabel",{
+  Text="⌄",BackgroundTransparency=1,Size=UDim2.fromOffset(18,28),
+  Position=UDim2.new(1,-34,0,30),Font=Enum.Font.GothamBold,TextSize=15
+ },f)
+ w:_theme(chevron,"TextColor3","muted")
  local handle={}
  local disabled=false
- function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  b.TextTransparency=disabled and .55 or 0
+  chevron.TextTransparency=disabled and .55 or 0
+  if disabled and w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
+ end
  function handle:SetVisible(v)
   f.Visible=v~=false
   if not f.Visible and w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
@@ -436,8 +581,8 @@ function Tab:CreateDropdown(o)
   f:Destroy()
  end
  local function render()
-  if multi then b.Text=(#value==0 and "Select..." or table.concat(value,", ")).."  ▾"
-  else b.Text=tostring(value or "Select...").."  ▾" end
+  if multi then b.Text="  "..(#value==0 and "Select..." or table.concat(value,", "))
+  else b.Text="  "..tostring(value or "Select...") end
  end
  function handle:Get()
   if not multi then return value end
@@ -491,7 +636,7 @@ function Tab:CreateDropdown(o)
   local panel=make("Frame",{Size=UDim2.fromOffset(panelWidth,panelHeight),BorderSizePixel=0,ZIndex=102},overlay)
   panel.BackgroundColor3=w.colors.panel
   round(panel,5)
-  make("UIStroke",{Color=w.colors.border,Thickness=1},panel)
+  make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.55},panel)
   local function positionPanel()
    local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
    local x=math.clamp(b.AbsolutePosition.X,6,math.max(6,viewport.X-panelWidth-6))
@@ -505,7 +650,7 @@ function Tab:CreateDropdown(o)
    Size=UDim2.new(1,-12,0,29),Position=UDim2.fromOffset(6,6),
    BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
    PlaceholderColor3=w.colors.muted,PlaceholderText="Search options...",
-   Text="",ClearTextOnFocus=false,Font=Enum.Font.Code,TextSize=13,
+   Text="",ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12,
    BorderSizePixel=0,ZIndex=104
   },panel)
   round(search,3)
@@ -528,12 +673,18 @@ function Tab:CreateDropdown(o)
      local item=make("TextButton",{
       Text=((multi and table.find(value,chosen)~=nil or chosen==value) and "✓  " or "   ")..label,
       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
-      TextColor3=chosen==value and w.colors.accent or w.colors.text,
-      BorderSizePixel=0,Font=Enum.Font.Code,TextSize=13,
+      TextColor3=(multi and table.find(value,chosen)~=nil or chosen==value) and w.colors.accent or w.colors.text,
+      BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
       TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
      },list)
-     round(item,3)
-     optionButtons[#optionButtons+1]=item
+     round(item,4)
+      item.MouseEnter:Connect(function()
+       if item.Parent then item.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
+      end)
+      item.MouseLeave:Connect(function()
+       if item.Parent then item.BackgroundColor3=w.colors.raised end
+      end)
+      optionButtons[#optionButtons+1]=item
      item.MouseButton1Click:Connect(function()
       if multi then
        local nextValue=table.clone(value)
@@ -577,11 +728,19 @@ function Tab:CreateMultiDropdown(o)
 end
 function Tab:CreateInput(o)
  local w=self.window
- local f=self:_base(64)
- local name=make("TextLabel",{Text=tostring(o.Name or "Input"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local f=self:_base(63)
+ local name=make("TextLabel",{Text=tostring(o.Name or "Input"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(name,"TextColor3","text")
- local box=make("TextBox",{Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),ClearTextOnFocus=false,Size=UDim2.new(1,-14,0,29),Position=UDim2.fromOffset(7,28),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
- w:_theme(box,"TextColor3","accent")w:_theme(box,"BackgroundColor3","panel")
+ local box=make("TextBox",{
+  Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),
+  ClearTextOnFocus=false,Size=UDim2.new(1,-20,0,29),
+  Position=UDim2.fromOffset(10,28),Font=Enum.Font.Gotham,TextSize=12,
+  TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0
+ },f)
+ round(box,5)
+ w:_theme(box,"TextColor3","text")
+ w:_theme(box,"BackgroundColor3","raised")
+ w:_theme(box,"PlaceholderColor3","muted")
  local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.45},box)
  w._connections[#w._connections+1]=box.Focused:Connect(function()
   outline.Color=w.colors.accent outline.Transparency=0
@@ -611,16 +770,16 @@ function Tab:CreateParagraph(o)
  local w=self.window
  local f=self:_base(math.clamp(tonumber(o.Height) or 82,56,220))
  local heading=make("TextLabel",{
-  Position=UDim2.fromOffset(9,5),Size=UDim2.new(1,-18,0,23),
+  Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.Code,TextSize=15,Text=tostring(o.Title or "INFORMATION")
+  Font=Enum.Font.GothamBold,TextSize=12,Text=tostring(o.Title or "INFORMATION")
  },f)
  w:_theme(heading,"TextColor3","accent")
  local content=make("TextLabel",{
-  Position=UDim2.fromOffset(9,30),Size=UDim2.new(1,-18,1,-36),
+  Position=UDim2.fromOffset(10,30),Size=UDim2.new(1,-20,1,-36),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
   TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
-  Font=Enum.Font.Code,TextSize=13,Text=tostring(o.Content or "")
+  Font=Enum.Font.Gotham,TextSize=12,Text=tostring(o.Content or "")
  },f)
  w:_theme(content,"TextColor3","text")
  local handle={}
@@ -644,19 +803,20 @@ end
 function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
- local f=self:_base(230)
+ local expanded=o.Expanded==true
+ local f=self:_base(expanded and 230 or 42)
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
- local heading=make("TextLabel",{
-  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.Code,TextSize=14,
+ local heading=make("TextButton",{
+  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.GothamMedium,TextSize=12,AutoButtonColor=false,
   TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
   Position=UDim2.fromOffset(9,4),Size=UDim2.new(1,-82,0,22)
  },f)
  w:_theme(heading,"TextColor3","text")
- local swatch=make("Frame",{
+ local swatch=make("TextButton",{
   Position=UDim2.new(1,-43,0,7),Size=UDim2.fromOffset(30,18),
-  BackgroundColor3=initial,BorderSizePixel=0
+  BackgroundColor3=initial,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
  round(swatch,3)
  local picker=make("Frame",{
@@ -713,24 +873,26 @@ function Tab:CreateColorPicker(o)
  },hueBar)
  local hex=make("TextBox",{
   Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,25),
-  Text=colorHex(initial),Font=Enum.Font.Code,TextSize=13,
+  Text=colorHex(initial),Font=Enum.Font.Gotham,TextSize=13,
   ClearTextOnFocus=false,BorderSizePixel=0,
   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
  },f)
  round(hex,3)
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
  local rgbFields={}
+ local rgbCaptions={}
  for channel,name in ipairs({"R","G","B"}) do
   local x=9+(channel-1)*76
   local caption=make("TextLabel",{
    Position=UDim2.fromOffset(x,191),Size=UDim2.fromOffset(16,25),
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
-   Font=Enum.Font.Code,TextSize=12
+   Font=Enum.Font.Gotham,TextSize=12
   },f)
+  rgbCaptions[channel]=caption
   local field=make("TextBox",{
    Position=UDim2.fromOffset(x+18,191),Size=UDim2.fromOffset(50,25),
    BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
-   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0,
+   Font=Enum.Font.Gotham,TextSize=12,BorderSizePixel=0,
    ClearTextOnFocus=false,Text="0"
   },f)
   round(field,3)
@@ -749,6 +911,24 @@ function Tab:CreateColorPicker(o)
   end
  end
  local handle={}
+ local function setExpanded(v)
+  expanded=v==true
+  f.Size=UDim2.new(1,-4,0,expanded and 230 or 42)
+  heading.Text=tostring(o.Name or "Colour picker")..(expanded and "  ▴" or "  ▾")
+  picker.Visible=expanded
+  hueBar.Visible=expanded
+  hex.Visible=expanded
+  for _,caption in ipairs(rgbCaptions) do caption.Visible=expanded end
+  for _,field in ipairs(rgbFields) do field.Visible=expanded end
+ end
+ function handle:SetExpanded(v)setExpanded(v)end
+ function handle:GetExpanded()return expanded end
+ w._connections[#w._connections+1]=heading.MouseButton1Click:Connect(function()
+  if not disabled then setExpanded(not expanded) end
+ end)
+ w._connections[#w._connections+1]=swatch.MouseButton1Click:Connect(function()
+  if not disabled then setExpanded(not expanded) end
+ end)
  function handle:Get()return Color3.fromHSV(hue,saturation,value)end
  function handle:GetHex()return colorHex(handle:Get())end
  function handle:GetRGB()
@@ -779,7 +959,7 @@ function Tab:CreateColorPicker(o)
  function handle:Destroy()f:Destroy()end
  local dragging=nil
  local function applyInput(which,pos)
-  if disabled then return end
+  if disabled or not expanded or not f.Parent then return end
   if which=="sv" then
    saturation=math.clamp((pos.X-picker.AbsolutePosition.X)/math.max(1,picker.AbsoluteSize.X),0,1)
    value=1-math.clamp((pos.Y-picker.AbsolutePosition.Y)/math.max(1,picker.AbsoluteSize.Y),0,1)
@@ -801,6 +981,7 @@ function Tab:CreateColorPicker(o)
   end
  end)
  w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
+  if not f.Parent then dragging=nil return end
   if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
    applyInput(dragging,i.Position)
   end
@@ -828,6 +1009,7 @@ function Tab:CreateColorPicker(o)
  end
  w:_register(o.Flag,handle)
  repaint()
+ setExpanded(expanded)
  return handle
 end
 
@@ -836,20 +1018,20 @@ end
 function Tab:CreateKeybind(o)
  o=o or {}
  local w=self.window
- local f=self:_base(43)
+ local f=self:_base(40)
  local mode=o.Mode or "Toggle"
  if mode~="Hold" and mode~="Toggle" and mode~="Press" then mode="Toggle" end
  local label=make("TextLabel",{
-  Text=tostring(o.Name or "Keybind"),Font=Enum.Font.Code,
-  TextSize=14,BackgroundTransparency=1,
+  Text=tostring(o.Name or "Keybind"),Font=Enum.Font.GothamMedium,
+  TextSize=12,BackgroundTransparency=1,
   TextXAlignment=Enum.TextXAlignment.Left,
   Position=UDim2.fromOffset(8,0),Size=UDim2.new(.56,-8,1,0)
  },f)
  w:_theme(label,"TextColor3","text")
  local button=make("TextButton",{
-  Size=UDim2.new(.42,-8,0,30),Position=UDim2.new(.58,0,0,7),
-  BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
-  Text="[ NONE ]",Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0
+  Size=UDim2.new(.42,-8,0,28),Position=UDim2.new(.58,0,0,6),
+  BackgroundColor3=w.colors.raised,TextColor3=w.colors.accent,
+  Text="None",Font=Enum.Font.GothamMedium,TextSize=12,BorderSizePixel=0
  },f)
  round(button,3)
  local selected=nil
@@ -857,7 +1039,7 @@ function Tab:CreateKeybind(o)
  local disabled=false
  local handle={}
  local function redraw()
-  button.Text="["..(selected or "NONE").."]"
+  button.Text=selected or "None"
  end
  function handle:Get()return selected or "None"end
  function handle:Set(candidate,notify)
@@ -898,7 +1080,7 @@ function Tab:CreateKeybind(o)
  w._connections[#w._connections+1]=button.MouseButton1Click:Connect(function()
   if disabled then return end
   w._bindingCapture=handle
-  button.Text="[ PRESS KEY ]"
+  button.Text="Press a key..."
  end)
  handle:Set(o.Default or "None")
  table.insert(w._keybinds,handle)
@@ -915,12 +1097,12 @@ function Tab:CreateTextArea(o)
  local label=make("TextLabel",{
   Text=tostring(o.Name or "JSON"),BackgroundTransparency=1,
   Position=UDim2.fromOffset(6,3),Size=UDim2.new(1,-12,0,22),
-  Font=Enum.Font.Code,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
  },f)
  w:_theme(label,"TextColor3","accent")
  local box=make("TextBox",{
   Size=UDim2.new(1,-12,1,-30),Position=UDim2.fromOffset(6,26),
-  BackgroundColor3=w.colors.panel,TextColor3=w.colors.text,
+  BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
   PlaceholderColor3=w.colors.muted,Text=tostring(o.Default or ""),
   PlaceholderText=tostring(o.Placeholder or "Paste JSON here..."),
   ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,
@@ -1196,13 +1378,13 @@ function Lib:CreateWindow(o)
  assert(player,"reefFish must run in a client LocalScript")
  local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
  local w=setmetatable({
-  width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 370),
+  width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 380),
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
-  rainEnabled=true,rainDensity=.82,rainSpeed=.4,minimized=false,destroyed=false,
+  rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
   flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
-  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 12,9,16)
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16)
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
  if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
@@ -1226,22 +1408,69 @@ function Lib:CreateWindow(o)
  w.screen=make("ScreenGui",{Name="reefFishUI",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},parent)
  w.root=make("Frame",{Size=UDim2.fromOffset(w.width,w.height),Position=UDim2.new(.5,-w.width/2,.5,-w.height/2),BorderSizePixel=0,ClipsDescendants=true},w.screen)
  w:_theme(w.root,"BackgroundColor3","border")
+ round(w.root,9)
  local pad=w.borderThickness
  local inner=make("Frame",{Size=UDim2.new(1,-2*pad,1,-2*pad),Position=UDim2.fromOffset(pad,pad),BorderSizePixel=0,ZIndex=5},w.root)
  w:_theme(inner,"BackgroundColor3","bg")
+ round(inner,6)
  w.inner=inner
  local top=make("Frame",{Size=UDim2.new(1,0,0,42),BorderSizePixel=0,ZIndex=6},inner)
  w:_theme(top,"BackgroundColor3","panel")
- local caption=make("TextLabel",{Text="reefFish // "..tostring(o.Title or "CONSOLE").."  ["..Lib.Version.."]",Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=16,ZIndex=7},top)
- w:_theme(caption,"TextColor3","accent")
- local min=make("TextButton",{Text="_",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-72,0,6),BorderSizePixel=0,ZIndex=7},top)
- local close=make("TextButton",{Text="X",Size=UDim2.fromOffset(32,30),Position=UDim2.new(1,-37,0,6),BorderSizePixel=0,ZIndex=7},top)
- for _,b in ipairs({min,close}) do w:_theme(b,"BackgroundColor3","raised") w:_theme(b,"TextColor3","accent") end
+ local caption=make("TextLabel",{
+  Text=tostring(o.Title or "reefFish"),Position=UDim2.fromOffset(12,2),
+  Size=UDim2.new(1,-110,0,23),BackgroundTransparency=1,
+  TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.GothamBold,TextSize=15,ZIndex=7
+ },top)
+ w:_theme(caption,"TextColor3","text")
+ local subtitle=make("TextLabel",{
+  Text="reefFish  /  "..Lib.Version,Position=UDim2.fromOffset(12,24),
+  Size=UDim2.new(1,-110,0,13),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,
+  Font=Enum.Font.Gotham,TextSize=10,ZIndex=7
+ },top)
+ w:_theme(subtitle,"TextColor3","muted")
+ local min=make("TextButton",{
+  Text="−",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-69,0,7),
+  BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
+ },top)
+ local close=make("TextButton",{
+  Text="×",Size=UDim2.fromOffset(30,28),Position=UDim2.new(1,-36,0,7),
+  BorderSizePixel=0,Font=Enum.Font.GothamBold,TextSize=18,ZIndex=7,AutoButtonColor=false
+ },top)
+ for _,b in ipairs({min,close}) do
+  round(b,5)
+  w:_theme(b,"BackgroundColor3","raised")
+  w:_theme(b,"TextColor3","text")
+  w:_feedback(b,b)
+ end
  w.body=make("Frame",{Position=UDim2.fromOffset(0,42),Size=UDim2.new(1,0,1,-66),BackgroundTransparency=1,ZIndex=6},inner)
- w.nav=make("ScrollingFrame",{Size=UDim2.new(.3,0,1,0),ScrollBarThickness=0,BackgroundTransparency=1,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6},w.body)
- make("UIListLayout",{Padding=UDim.new(0,4)},w.nav)
- w.content=make("Frame",{Size=UDim2.new(.7,-5,1,0),Position=UDim2.new(.3,5,0,0),BackgroundTransparency=1,ZIndex=6},w.body)
- w._status=make("TextLabel",{Text="> reefFish "..Lib.Version.." | PROFILES | ready_",Position=UDim2.new(0,8,1,-24),Size=UDim2.new(1,-16,0,22),BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=12,ZIndex=6},inner)
+ w.nav=make("ScrollingFrame",{
+  Size=UDim2.new(.26,0,1,0),ScrollBarThickness=0,
+  BackgroundTransparency=0,CanvasSize=UDim2.new(),
+  AutomaticCanvasSize=Enum.AutomaticSize.Y,ZIndex=6
+ },w.body)
+ w:_theme(w.nav,"BackgroundColor3","bg")
+ make("UIPadding",{
+  PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,6),
+  PaddingRight=UDim.new(0,2),PaddingBottom=UDim.new(0,8)
+ },w.nav)
+ make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
+ local navDivider=make("Frame",{
+  Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
+  BorderSizePixel=0,ZIndex=7,Active=false
+ },w.body)
+ w:_theme(navDivider,"BackgroundColor3","raised")
+ w.content=make("Frame",{
+  Size=UDim2.new(.74,-3,1,0),Position=UDim2.new(.26,3,0,0),
+  BackgroundTransparency=1,ZIndex=6
+ },w.body)
+ w._status=make("TextLabel",{
+  Text="reefFish  •  Ready",Position=UDim2.new(0,11,1,-24),
+  Size=UDim2.new(1,-22,0,22),BackgroundTransparency=1,
+  TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,
+  TextSize=11,ZIndex=6
+ },inner)
  w:_theme(w._status,"TextColor3","muted")
  w._toastLayer=make("Frame",{
   Position=UDim2.new(1,-299,1,-250),Size=UDim2.fromOffset(280,225),
@@ -1453,7 +1682,7 @@ function Lib:CreateWindow(o)
    Callback=function(value)w:SetRain(w.rainEnabled,w.rainDensity,value/100)end
   })
   local border=appearance:CreateSlider({
-   Name="Border thickness",Min=9,Max=16,Increment=1,Default=w.borderThickness,
+   Name="Border thickness",Min=3,Max=16,Increment=1,Default=w.borderThickness,
    Callback=function(value)w:SetBorderThickness(value)end
   })
   local function syncAppearance()
