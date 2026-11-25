@@ -798,19 +798,20 @@ end
 function Tab:CreateColorPicker(o)
  o=o or {}
  local w=self.window
- local f=self:_base(230)
+ local expanded=o.Expanded==true
+ local f=self:_base(expanded and 230 or 42)
  local initial=parseColor(o.Default or o.Color) or w.colors.accent
  local hue,saturation,value=initial:ToHSV()
  local disabled=false
- local heading=make("TextLabel",{
-  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.Code,TextSize=14,
+ local heading=make("TextButton",{
+  Text=tostring(o.Name or "Colour picker"),Font=Enum.Font.GothamMedium,TextSize=12,AutoButtonColor=false,
   TextXAlignment=Enum.TextXAlignment.Left,BackgroundTransparency=1,
   Position=UDim2.fromOffset(9,4),Size=UDim2.new(1,-82,0,22)
  },f)
  w:_theme(heading,"TextColor3","text")
- local swatch=make("Frame",{
+ local swatch=make("TextButton",{
   Position=UDim2.new(1,-43,0,7),Size=UDim2.fromOffset(30,18),
-  BackgroundColor3=initial,BorderSizePixel=0
+  BackgroundColor3=initial,BorderSizePixel=0,Text="",AutoButtonColor=false
  },f)
  round(swatch,3)
  local picker=make("Frame",{
@@ -867,24 +868,26 @@ function Tab:CreateColorPicker(o)
  },hueBar)
  local hex=make("TextBox",{
   Position=UDim2.fromOffset(9,159),Size=UDim2.new(1,-18,0,25),
-  Text=colorHex(initial),Font=Enum.Font.Code,TextSize=13,
+  Text=colorHex(initial),Font=Enum.Font.Gotham,TextSize=13,
   ClearTextOnFocus=false,BorderSizePixel=0,
   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
  },f)
  round(hex,3)
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
  local rgbFields={}
+ local rgbCaptions={}
  for channel,name in ipairs({"R","G","B"}) do
   local x=9+(channel-1)*76
   local caption=make("TextLabel",{
    Position=UDim2.fromOffset(x,191),Size=UDim2.fromOffset(16,25),
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
-   Font=Enum.Font.Code,TextSize=12
+   Font=Enum.Font.Gotham,TextSize=12
   },f)
+  rgbCaptions[channel]=caption
   local field=make("TextBox",{
    Position=UDim2.fromOffset(x+18,191),Size=UDim2.fromOffset(50,25),
    BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
-   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0,
+   Font=Enum.Font.Gotham,TextSize=12,BorderSizePixel=0,
    ClearTextOnFocus=false,Text="0"
   },f)
   round(field,3)
@@ -903,6 +906,24 @@ function Tab:CreateColorPicker(o)
   end
  end
  local handle={}
+ local function setExpanded(v)
+  expanded=v==true
+  f.Size=UDim2.new(1,-4,0,expanded and 230 or 42)
+  heading.Text=tostring(o.Name or "Colour picker")..(expanded and "  ▴" or "  ▾")
+  picker.Visible=expanded
+  hueBar.Visible=expanded
+  hex.Visible=expanded
+  for _,caption in ipairs(rgbCaptions) do caption.Visible=expanded end
+  for _,field in ipairs(rgbFields) do field.Visible=expanded end
+ end
+ function handle:SetExpanded(v)setExpanded(v)end
+ function handle:GetExpanded()return expanded end
+ w._connections[#w._connections+1]=heading.MouseButton1Click:Connect(function()
+  if not disabled then setExpanded(not expanded) end
+ end)
+ w._connections[#w._connections+1]=swatch.MouseButton1Click:Connect(function()
+  if not disabled then setExpanded(not expanded) end
+ end)
  function handle:Get()return Color3.fromHSV(hue,saturation,value)end
  function handle:GetHex()return colorHex(handle:Get())end
  function handle:GetRGB()
@@ -933,7 +954,7 @@ function Tab:CreateColorPicker(o)
  function handle:Destroy()f:Destroy()end
  local dragging=nil
  local function applyInput(which,pos)
-  if disabled then return end
+  if disabled or not expanded or not f.Parent then return end
   if which=="sv" then
    saturation=math.clamp((pos.X-picker.AbsolutePosition.X)/math.max(1,picker.AbsoluteSize.X),0,1)
    value=1-math.clamp((pos.Y-picker.AbsolutePosition.Y)/math.max(1,picker.AbsoluteSize.Y),0,1)
@@ -955,6 +976,7 @@ function Tab:CreateColorPicker(o)
   end
  end)
  w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
+  if not f.Parent then dragging=nil return end
   if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
    applyInput(dragging,i.Position)
   end
@@ -982,6 +1004,7 @@ function Tab:CreateColorPicker(o)
  end
  w:_register(o.Flag,handle)
  repaint()
+ setExpanded(expanded)
  return handle
 end
 
