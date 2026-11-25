@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.3-alpha — Appearance-first redesign
+
+- Establish a shared design token set for typography, spacing, radii, row sizes and colour semantics.
+- Change default chrome to graphite surfaces with restrained accents and a 4 px matte edge; make animated Matrix rain opt-in.
+- Redesign the title bar, tab selection, spacing and default 600×420 workspace.
+- Replace repetitive stacked cards after section headings with grouped setting surfaces and subtle separators.
+- Introduce Primary/Secondary/Danger button variants and optional button/toggle descriptions without breaking existing calls.
+- Bring sliders, dropdowns, text fields, colour picker, keybinds and notifications into the same design language.
+- Make built-in navigation and profile-management labels less console-centric.
+- Preserve existing methods, flags, profile schema, HumuHub loader integration and stable distribution filename.
+- Static structure checks and source/dist equality are required; actual Roblox visual validation remains pending.
+
 ## 0.4.2-alpha — Stabilization and lifecycle fixes
 
 - Correct title dragging so scaled initial window coordinates no longer cause a jump.
