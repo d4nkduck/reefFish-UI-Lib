@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.4.1-alpha
+-- reefFish UI Lib v0.4.2-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.4.1-alpha"}
+local Lib={Version="0.4.2-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -113,15 +113,47 @@ function Window:_feedback(hitbox,surface,baseToken)
    surface.BackgroundColor3=target
   end
  end
- self._feedbackRefresh[#self._feedbackRefresh+1]=function()refresh(false)end
+ self:_trackFeedback(surface,function()refresh(false)end)
  local function add(signal,fn)
-  self._connections[#self._connections+1]=signal:Connect(fn)
+  return self:_connectControl(surface,signal,fn)
  end
  add(hitbox.MouseEnter,function()state="hover" refresh(true)end)
  add(hitbox.MouseLeave,function()state="normal" refresh(true)end)
  add(hitbox.MouseButton1Down,function()state="pressed" refresh(true)end)
  add(hitbox.MouseButton1Up,function()state="hover" refresh(true)end)
  refresh(false)
+end
+function Window:_connectControl(owner,signal,callback)
+ local connection=signal:Connect(callback)
+ local bucket=self._controlConnections[owner]
+ if not bucket then
+  bucket={}
+  self._controlConnections[owner]=bucket
+  owner.Destroying:Connect(function()
+   for _,c in ipairs(bucket) do c:Disconnect() end
+   self._controlConnections[owner]=nil
+  end)
+ end
+ bucket[#bucket+1]=connection
+ return connection
+end
+function Window:_trackFeedback(owner,refresh)
+ local entry={owner=owner,refresh=refresh}
+ self._feedbackRefresh[#self._feedbackRefresh+1]=entry
+ owner.Destroying:Connect(function()
+  for i=#self._feedbackRefresh,1,-1 do
+   if self._feedbackRefresh[i]==entry then
+    table.remove(self._feedbackRefresh,i)
+    break
+   end
+  end
+ end)
+end
+function Window:_refreshFeedback()
+ for i=#self._feedbackRefresh,1,-1 do
+  local item=self._feedbackRefresh[i]
+  if item.owner.Parent then item.refresh() else table.remove(self._feedbackRefresh,i) end
+ end
 end
 function Window:_markChanged(kind)
  if self._importing then return end
@@ -141,14 +173,27 @@ function Window:SetBorderThickness(value)
 end
 function Window:_theme(obj,property,token)
  self._bound[#self._bound+1]={obj,property,token}
+ if not self._boundOwners[obj] then
+  self._boundOwners[obj]=true
+  obj.Destroying:Connect(function()
+   self._boundOwners[obj]=nil
+   for i=#self._bound,1,-1 do
+    if self._bound[i][1]==obj then table.remove(self._bound,i) end
+   end
+  end)
+ end
  obj[property]=self.colors[token]
 end
 function Window:SetTheme(name)
  if not palettes[name] then return false end
  if self._closeDropdown then self._closeDropdown() end
  self.themeName=name self.colors=table.clone(palettes[name])
- for _,bound in ipairs(self._bound) do if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]] end end
- for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ for i=#self._bound,1,-1 do
+  local bound=self._bound[i]
+  if bound[1].Parent then bound[1][bound[2]]=self.colors[bound[3]]
+  else table.remove(self._bound,i) end
+ end
+ self:_refreshFeedback()
  if self.active then self:SelectTab(self.active) end
  if self._repaintRain then self._repaintRain() end
  self:_markChanged("appearance")
@@ -159,10 +204,12 @@ function Window:SetAccentColor(value)
  local color=parseColor(value)
  if not color then return false end
  self.colors.accent=color
- for _,bound in ipairs(self._bound) do
-  if bound[3]=="accent" and bound[1].Parent then bound[1][bound[2]]=color end
+ for i=#self._bound,1,-1 do
+  local bound=self._bound[i]
+  if not bound[1].Parent then table.remove(self._bound,i)
+  elseif bound[3]=="accent" then bound[1][bound[2]]=color end
  end
- for _,refresh in ipairs(self._feedbackRefresh) do refresh() end
+ self:_refreshFeedback()
  if self.active then self:SelectTab(self.active) end
  self:_markChanged("appearance")
  return true
@@ -242,7 +289,7 @@ function Window:_viewport()
  return camera and camera.ViewportSize or Vector2.new(1280,720)
 end
 function Window:_clampPosition()
- if not self.root then return end
+ if self.destroyed or not self.root then return end
  local viewport=self:_viewport()
  local size=self.root.Size
  local x=self.root.Position.X.Scale*viewport.X+self.root.Position.X.Offset
@@ -256,31 +303,70 @@ function Window:_clampPosition()
  )
 end
 function Window:_layout()
- if not self.root then return end
+ if self.destroyed or not self.root then return end
  local viewport=self:_viewport()
- local maxWidth=math.max(200,math.floor(viewport.X-16))
- local maxHeight=math.max(170,math.floor(viewport.Y-16))
- self.width=math.clamp(self.width,math.min(330,maxWidth),maxWidth)
- self.height=math.clamp(self.height,math.min(250,maxHeight),maxHeight)
+ local maxWidth=math.max(140,math.floor(viewport.X-16))
+ local maxHeight=math.max(130,math.floor(viewport.Y-16))
+ -- Preserve intended dimensions when the viewport temporarily gets smaller.
+ self.width=math.clamp(self.requestedWidth,math.min(330,maxWidth),maxWidth)
+ self.height=math.clamp(self.requestedHeight,math.min(250,maxHeight),maxHeight)
  local shownHeight=self.minimized and (42+self.borderThickness*2) or self.height
  self.root.Size=UDim2.fromOffset(self.width,shownHeight)
  if self.nav and self.content then
-  local navWidth=math.clamp(math.floor(self.width*.26),95,155)
-  if self.width<390 then navWidth=90 end
-  self.nav.Size=UDim2.new(0,navWidth,1,0)
-  self.content.Position=UDim2.fromOffset(navWidth+3,0)
-  self.content.Size=UDim2.new(1,-navWidth-3,1,0)
-  if self._navDivider then self._navDivider.Position=UDim2.fromOffset(navWidth,0) end
+  local compact=self.width<420
+  self._compactNav=compact
+  if compact then
+   -- Mobile: horizontal, scrollable tab rail rather than a narrow sidebar.
+   self.nav.Position=UDim2.fromOffset(0,0)
+   self.nav.Size=UDim2.new(1,0,0,42)
+   self.nav.ScrollingDirection=Enum.ScrollingDirection.X
+   self.nav.AutomaticCanvasSize=Enum.AutomaticSize.X
+   if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Horizontal end
+   self.content.Position=UDim2.fromOffset(0,43)
+   self.content.Size=UDim2.new(1,0,1,-43)
+   if self._navDivider then
+    self._navDivider.Position=UDim2.fromOffset(0,42)
+    self._navDivider.Size=UDim2.new(1,0,0,1)
+   end
+  else
+   local navWidth=math.clamp(math.floor(self.width*.26),105,155)
+   self.nav.Position=UDim2.fromOffset(0,0)
+   self.nav.Size=UDim2.new(0,navWidth,1,0)
+   self.nav.ScrollingDirection=Enum.ScrollingDirection.Y
+   self.nav.AutomaticCanvasSize=Enum.AutomaticSize.Y
+   if self._navLayout then self._navLayout.FillDirection=Enum.FillDirection.Vertical end
+   self.content.Position=UDim2.fromOffset(navWidth+3,0)
+   self.content.Size=UDim2.new(1,-navWidth-3,1,0)
+   if self._navDivider then
+    self._navDivider.Position=UDim2.fromOffset(navWidth,0)
+    self._navDivider.Size=UDim2.new(0,1,1,0)
+   end
+  end
+  for _,tab in ipairs(self.tabs) do
+   tab.button.Size=compact and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32)
+  end
  end
  if self._resizeGrip then self._resizeGrip.Visible=not self.minimized end
+ if self._status then self._status.Visible=not self.minimized end
+ if self._toastLayer then
+  local toastWidth=math.min(280,math.max(120,viewport.X-20))
+  local toastHeight=math.min(225,math.max(70,viewport.Y-26))
+  self._toastLayer.Size=UDim2.fromOffset(toastWidth,toastHeight)
+  self._toastLayer.Position=UDim2.new(1,-toastWidth-10,1,-toastHeight-12)
+ end
  if self._ensureRainColumns then self._ensureRainColumns(self.width) end
  self:_clampPosition()
 end
 function Window:SetSize(width,height)
+ if self.destroyed then return Vector2.new(self.width,self.height) end
  if self._closeDropdown then self._closeDropdown() end
  if typeof(width)=="Vector2" then height=width.Y width=width.X end
- if type(width)=="number" and width==width then self.width=math.floor(width+.5) end
- if type(height)=="number" and height==height then self.height=math.floor(height+.5) end
+ if type(width)=="number" and width==width and width>0 and width<10000 then
+  self.requestedWidth=math.floor(width+.5)
+ end
+ if type(height)=="number" and height==height and height>0 and height<10000 then
+  self.requestedHeight=math.floor(height+.5)
+ end
  self:_layout()
  return Vector2.new(self.width,self.height)
 end
@@ -307,6 +393,10 @@ function Window:Destroy()
  self.destroyed=true
  if self._closeDropdown then self._closeDropdown() end
  self._bindingCapture=nil
+ if self._viewportConnection then
+  self._viewportConnection:Disconnect()
+  self._viewportConnection=nil
+ end
  -- Flush any queued autosaves before disconnecting.
  for kind,due in pairs(self._autosaveDue) do
   local name=self._autosaveTargets[kind]
@@ -316,7 +406,19 @@ function Window:Destroy()
   end
  end
  for _,c in ipairs(self._connections) do c:Disconnect() end
+ if self._controlConnections then
+  for _,bucket in pairs(self._controlConnections) do
+   for _,connection in ipairs(bucket) do connection:Disconnect() end
+  end
+  table.clear(self._controlConnections)
+ end
+ table.clear(self.flags)
  self.screen:Destroy()
+ table.clear(self._bound)
+ table.clear(self._boundOwners)
+ table.clear(self._feedbackRefresh)
+ table.clear(self._keybinds)
+ table.clear(self._connections)
  if self._registry and self._registry.__reefFishWindow==self then
   self._registry.__reefFishWindow=nil
  end
@@ -324,7 +426,8 @@ end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
  local button=make("TextButton",{
-  Text="  "..tostring(name),Size=UDim2.new(1,-10,0,32),
+  Text="  "..tostring(name),LayoutOrder=#self.tabs+1,
+  Size=self._compactNav and UDim2.fromOffset(112,32) or UDim2.new(1,-10,0,32),
   Font=Enum.Font.GothamMedium,TextSize=12,
   TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left,
   BorderSizePixel=0,AutoButtonColor=false
@@ -412,7 +515,7 @@ function Tab:CreateButton(o)
  w:_theme(arrow,"TextColor3","muted")
  w:_feedback(b,f)
  local disabled=false
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
+ w:_connectControl(f,b.MouseButton1Click,function()if not disabled then fire(o.Callback)end end)
  return {
   SetDisabled=function(_,v)
    disabled=v==true
@@ -459,7 +562,7 @@ function Tab:CreateToggle(o)
    knob.BackgroundColor3=knobColor
   end
  end
- w._feedbackRefresh[#w._feedbackRefresh+1]=function()render(false)end
+ w:_trackFeedback(f,function()render(false)end)
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
@@ -479,8 +582,8 @@ function Tab:CreateToggle(o)
   end
   return true
  end
- w:_register(o.Flag,handle)
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
+ w:_register(o.Flag,handle,f)
+ w:_connectControl(f,b.MouseButton1Click,function()
   if not disabled then handle:Set(not value,true) end
  end)
  render(false)
@@ -551,29 +654,38 @@ function Tab:CreateSlider(o)
   return true
  end
  local dragging=false
+ local dragTouch=nil
  local function updateFromPosition(pos)
   if disabled or not f.Parent then return end
   local fraction=math.clamp((pos.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
   handle:Set(min+fraction*(max-min),true)
  end
- w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
+ w:_connectControl(f,bar.InputBegan,function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
    if not disabled then
-    dragging=true
-    updateFromPosition(i.Position)
+    if not dragging then
+     dragging=true
+     dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+     updateFromPosition(i.Position)
+    end
    end
   end
  end)
- w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
+ w:_connectControl(f,UIS.InputEnded,function(i)
+  if (dragTouch==nil and i.UserInputType==Enum.UserInputType.MouseButton1)
+   or (dragTouch~=nil and i==dragTouch) then
+   dragging=false
+   dragTouch=nil
+  end
  end)
- w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if not f.Parent then dragging=false return end
-  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+ w:_connectControl(f,UIS.InputChanged,function(i)
+  if not f.Parent then dragging=false dragTouch=nil return end
+  local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
+  if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
    updateFromPosition(i.Position)
   end
  end)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  render()
  return handle
 end
@@ -669,7 +781,7 @@ function Tab:CreateDropdown(o)
   render()
   if w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
  end
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
+ w:_connectControl(f,b.MouseButton1Click,function()
   if w.destroyed or disabled then return end
   if w._dropdownOwner==b and w._closeDropdown then
    w._closeDropdown()
@@ -706,83 +818,91 @@ function Tab:CreateDropdown(o)
   local list=make("ScrollingFrame",{
    Position=UDim2.fromOffset(6,41),Size=UDim2.new(1,-12,1,-47),
    BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
-   ScrollBarImageColor3=w.colors.border,AutomaticCanvasSize=Enum.AutomaticSize.Y,
+   ScrollBarImageColor3=w.colors.muted,AutomaticCanvasSize=Enum.AutomaticSize.None,
    CanvasSize=UDim2.new(),ZIndex=103
   },panel)
-  make("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,2)},list)
-  local optionButtons={}
-  local MAX_DISPLAY=50
-  local function updateList(preserveScroll)
-   local oldPosition=preserveScroll and list.CanvasPosition or Vector2.zero
-   for _,item in ipairs(optionButtons) do item:Destroy() end
-   table.clear(optionButtons)
-   local query=string.lower(search.Text)
-   local shown,total=0,0
-   for _,option in ipairs(opts) do
-    local label=tostring(option)
-    if query=="" or string.find(string.lower(label),query,1,true) then
-     total+=1
-     if shown<MAX_DISPLAY then
-      shown+=1
-      local chosen=option
-      local selected=(multi and table.find(value,chosen)~=nil or chosen==value)
-      local item=make("TextButton",{
-       Text=(selected and "✓  " or "   ")..label,
-       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
-       TextColor3=selected and w.colors.accent or w.colors.text,
-       BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
-       TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
-      },list)
-      round(item,4)
-      optionButtons[#optionButtons+1]=item
-      item.MouseEnter:Connect(function()
-       if item.Parent then item.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
-      end)
-      item.MouseLeave:Connect(function()
-       if item.Parent then item.BackgroundColor3=w.colors.raised end
-      end)
-      item.MouseButton1Click:Connect(function()
-       if multi then
-        local nextValue=table.clone(value)
-        local index=table.find(nextValue,chosen)
-        if index then table.remove(nextValue,index) else table.insert(nextValue,chosen) end
-        handle:Set(nextValue,true)
-        updateList(true)
-       else
-        handle:Set(chosen,true)
-        if w._closeDropdown then w._closeDropdown() end
-       end
-      end)
-     end
+
+  -- Virtual scrolling: all options remain reachable without instantiating
+  -- one Roblox TextButton per option.
+  local ROW_HEIGHT=30
+  local visibleCount=math.max(3,math.ceil((panelHeight-47)/ROW_HEIGHT)+2)
+  local filtered={}
+  local rowButtons={}
+  local rowIndexes={}
+  local empty=make("TextLabel",{
+   Text="No matching options",
+   Size=UDim2.new(1,-8,0,30),Position=UDim2.fromOffset(4,0),
+   BackgroundTransparency=1,Font=Enum.Font.Gotham,
+   TextSize=12,TextColor3=w.colors.muted,ZIndex=105,Visible=false
+  },list)
+  local function refreshVisible()
+   if not overlay or not overlay.Parent then return end
+   local first=math.max(1,math.floor(list.CanvasPosition.Y/ROW_HEIGHT)+1)
+   for slot,row in ipairs(rowButtons) do
+    local index=first+slot-1
+    local choice=filtered[index]
+    rowIndexes[slot]=index
+    if choice~=nil then
+     local chosen=multi and table.find(value,choice)~=nil or choice==value
+     row.Text=(chosen and "✓  " or "   ")..tostring(choice)
+     row.TextColor3=chosen and w.colors.accent or w.colors.text
+     row.BackgroundColor3=w.colors.raised
+     row.Position=UDim2.fromOffset(2,(index-1)*ROW_HEIGHT)
+     row.Visible=true
+    else
+     row.Visible=false
     end
    end
-   if total==0 then
-    local empty=make("TextLabel",{
-     Text="No results",Size=UDim2.new(1,-4,0,28),
-     BackgroundTransparency=1,TextColor3=w.colors.muted,
-     Font=Enum.Font.Gotham,TextSize=12,ZIndex=105
-    },list)
-    optionButtons[#optionButtons+1]=empty
-   elseif total>shown then
-    local hint=make("TextLabel",{
-     Text="Showing "..shown.." of "..total.." — search to narrow",
-     Size=UDim2.new(1,-4,0,28),BackgroundTransparency=1,
-     TextColor3=w.colors.muted,Font=Enum.Font.Gotham,
-     TextSize=11,ZIndex=105
-    },list)
-    optionButtons[#optionButtons+1]=hint
-   end
-   list.CanvasPosition=oldPosition
+   empty.Visible=#filtered==0
   end
-  search.FocusLost:Connect(function(enterPressed)
-   if not enterPressed or multi or not overlay or not overlay.Parent then return end
+  for slot=1,visibleCount do
+   local row=make("TextButton",{
+    Text="",Size=UDim2.new(1,-8,0,28),
+    BackgroundColor3=w.colors.raised,BorderSizePixel=0,
+    Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+    AutoButtonColor=false,TextTruncate=Enum.TextTruncate.AtEnd,
+    ZIndex=105,Visible=false
+   },list)
+   round(row,4)
+   rowButtons[slot]=row
+   row.MouseEnter:Connect(function()
+    if row.Parent then row.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
+   end)
+   row.MouseLeave:Connect(function()
+    if row.Parent then row.BackgroundColor3=w.colors.raised end
+   end)
+   row.MouseButton1Click:Connect(function()
+    local choice=filtered[rowIndexes[slot]]
+    if choice==nil then return end
+    if multi then
+     local nextValue=table.clone(value)
+     local index=table.find(nextValue,choice)
+     if index then table.remove(nextValue,index) else table.insert(nextValue,choice) end
+     handle:Set(nextValue,true)
+     refreshVisible()
+    else
+     handle:Set(choice,true)
+     if w._closeDropdown then w._closeDropdown() end
+    end
+   end)
+  end
+  local function updateList()
+   table.clear(filtered)
    local query=string.lower(search.Text)
    for _,option in ipairs(opts) do
     if query=="" or string.find(string.lower(tostring(option)),query,1,true) then
-     handle:Set(option,true)
-     if w._closeDropdown then w._closeDropdown() end
-     break
+     filtered[#filtered+1]=option
     end
+   end
+   list.CanvasSize=UDim2.new(0,0,0,#filtered*ROW_HEIGHT)
+   list.CanvasPosition=Vector2.zero
+   refreshVisible()
+  end
+  list:GetPropertyChangedSignal("CanvasPosition"):Connect(refreshVisible)
+  search.FocusLost:Connect(function(enterPressed)
+   if enterPressed and not multi and filtered[1]~=nil and overlay and overlay.Parent then
+    handle:Set(filtered[1],true)
+    if w._closeDropdown then w._closeDropdown() end
    end
   end)
   local positionConn=b:GetPropertyChangedSignal("AbsolutePosition"):Connect(positionPanel)
@@ -801,7 +921,7 @@ function Tab:CreateDropdown(o)
   search:GetPropertyChangedSignal("Text"):Connect(updateList)
   updateList()
  end)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  render()
  return handle
 end
@@ -838,8 +958,8 @@ function Tab:CreateInput(o)
   outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
   outline.Transparency=box:IsFocused() and 0 or .5
  end
- w._feedbackRefresh[#w._feedbackRefresh+1]=refreshOutline
- w._connections[#w._connections+1]=box.Focused:Connect(refreshOutline)
+ w:_trackFeedback(f,refreshOutline)
+ w:_connectControl(f,box.Focused,refreshOutline)
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
@@ -866,7 +986,7 @@ function Tab:CreateInput(o)
   end
   return true
  end
- w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+ w:_connectControl(f,box.FocusLost,function()
   refreshOutline()
   if disabled then return end
   if o.Numeric and tonumber(box.Text)==nil then
@@ -878,7 +998,7 @@ function Tab:CreateInput(o)
   end
   handle:Set(box.Text,true)
  end)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  return handle
 end
 -- A readable paragraph card for long help or diagnostic descriptions.
@@ -909,7 +1029,7 @@ function Tab:CreateParagraph(o)
   end
  end
  if autoHeight then
-  w._connections[#w._connections+1]=content:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHeight)
+  w:_connectControl(f,content:GetPropertyChangedSignal("AbsoluteSize"),updateHeight)
   task.defer(updateHeight)
  end
  local handle={}
@@ -1009,24 +1129,29 @@ function Tab:CreateColorPicker(o)
   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
  },f)
  round(hex,3)
+ w:_theme(hex,"BackgroundColor3","panel")
+ w:_theme(hex,"TextColor3","accent")
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
  local rgbFields={}
  local rgbCaptions={}
  for channel,name in ipairs({"R","G","B"}) do
-  local x=9+(channel-1)*76
+  local fraction=(channel-1)/3
   local caption=make("TextLabel",{
-   Position=UDim2.fromOffset(x,191),Size=UDim2.fromOffset(16,25),
+   Position=UDim2.new(fraction,10,0,191),Size=UDim2.fromOffset(16,25),
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
    Font=Enum.Font.Gotham,TextSize=12
   },f)
+  w:_theme(caption,"TextColor3","muted")
   rgbCaptions[channel]=caption
   local field=make("TextBox",{
-   Position=UDim2.fromOffset(x+18,191),Size=UDim2.fromOffset(50,25),
+   Position=UDim2.new(fraction,28,0,191),Size=UDim2.new(1/3,-34,0,25),
    BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent,
    Font=Enum.Font.Gotham,TextSize=12,BorderSizePixel=0,
    ClearTextOnFocus=false,Text="0"
   },f)
   round(field,3)
+  w:_theme(field,"BackgroundColor3","panel")
+  w:_theme(field,"TextColor3","accent")
   rgbFields[channel]=field
  end
  local function repaint()
@@ -1054,10 +1179,10 @@ function Tab:CreateColorPicker(o)
  end
  function handle:SetExpanded(v)setExpanded(v)end
  function handle:GetExpanded()return expanded end
- w._connections[#w._connections+1]=heading.MouseButton1Click:Connect(function()
+ w:_connectControl(f,heading.MouseButton1Click,function()
   if not disabled then setExpanded(not expanded) end
  end)
- w._connections[#w._connections+1]=swatch.MouseButton1Click:Connect(function()
+ w:_connectControl(f,swatch.MouseButton1Click,function()
   if not disabled then setExpanded(not expanded) end
  end)
  function handle:Get()return Color3.fromHSV(hue,saturation,value)end
@@ -1089,6 +1214,7 @@ function Tab:CreateColorPicker(o)
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  local dragging=nil
+ local dragTouch=nil
  local function applyInput(which,pos)
   if disabled or not expanded or not f.Parent then return end
   if which=="sv" then
@@ -1101,34 +1227,45 @@ function Tab:CreateColorPicker(o)
   if o.Flag then w:_markChanged("game") end
   fire(o.Callback,handle:Get())
  end
- w._connections[#w._connections+1]=picker.InputBegan:Connect(function(i)
+ w:_connectControl(f,picker.InputBegan,function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-   dragging="sv" applyInput(dragging,i.Position)
+   if not dragging then
+    dragging="sv"
+    dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+    applyInput(dragging,i.Position)
+   end
   end
  end)
- w._connections[#w._connections+1]=hueBar.InputBegan:Connect(function(i)
+ w:_connectControl(f,hueBar.InputBegan,function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-   dragging="hue" applyInput(dragging,i.Position)
+   if not dragging then
+    dragging="hue"
+    dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
+    applyInput(dragging,i.Position)
+   end
   end
  end)
- w._connections[#w._connections+1]=UIS.InputChanged:Connect(function(i)
-  if not f.Parent then dragging=nil return end
-  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+ w:_connectControl(f,UIS.InputChanged,function(i)
+  if not f.Parent then dragging=nil dragTouch=nil return end
+  local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
+  if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
    applyInput(dragging,i.Position)
   end
  end)
- w._connections[#w._connections+1]=UIS.InputEnded:Connect(function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+ w:_connectControl(f,UIS.InputEnded,function(i)
+  if (dragTouch==nil and i.UserInputType==Enum.UserInputType.MouseButton1)
+   or (dragTouch~=nil and i==dragTouch) then
    dragging=nil
+   dragTouch=nil
   end
  end)
- w._connections[#w._connections+1]=hex.Focused:Connect(function()outline.Color=w.colors.accent outline.Transparency=0 end)
- w._connections[#w._connections+1]=hex.FocusLost:Connect(function()
+ w:_connectControl(f,hex.Focused,function()outline.Color=w.colors.accent outline.Transparency=0 end)
+ w:_connectControl(f,hex.FocusLost,function()
   outline.Color=w.colors.muted outline.Transparency=.5
   if not handle:Set(hex.Text,true) then hex.Text=handle:GetHex() end
  end)
  for _,field in ipairs(rgbFields) do
-  w._connections[#w._connections+1]=field.FocusLost:Connect(function()
+  w:_connectControl(f,field.FocusLost,function()
    local rgb={}
    for i,box in ipairs(rgbFields) do rgb[i]=tonumber(box.Text) end
    if rgb[1] and rgb[2] and rgb[3] then
@@ -1138,7 +1275,7 @@ function Tab:CreateColorPicker(o)
    end
   end)
  end
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  repaint()
  setExpanded(expanded)
  return handle
@@ -1165,6 +1302,8 @@ function Tab:CreateKeybind(o)
   Text="None",Font=Enum.Font.GothamMedium,TextSize=12,BorderSizePixel=0
  },f)
  round(button,3)
+ w:_theme(button,"BackgroundColor3","raised")
+ w:_theme(button,"TextColor3","accent")
  local selected=nil
  local active=false
  local disabled=false
@@ -1192,9 +1331,15 @@ function Tab:CreateKeybind(o)
  end
  function handle:SetDisabled(v)disabled=v==true button.TextTransparency=disabled and .6 or 0 end
  function handle:SetVisible(v)f.Visible=v~=false end
- function handle:Destroy()
+ local function releaseKeybind()
   if w._bindingCapture==handle then w._bindingCapture=nil end
-  for i=#w._keybinds,1,-1 do if w._keybinds[i]==handle then table.remove(w._keybinds,i) end end
+  for i=#w._keybinds,1,-1 do
+   if w._keybinds[i]==handle then table.remove(w._keybinds,i) end
+  end
+ end
+ f.Destroying:Connect(releaseKeybind)
+ function handle:Destroy()
+  releaseKeybind()
   f:Destroy()
  end
  function handle:_input(down)
@@ -1208,14 +1353,14 @@ function Tab:CreateKeybind(o)
    fire(o.Callback,active,selected)
   end
  end
- w._connections[#w._connections+1]=button.MouseButton1Click:Connect(function()
+ w:_connectControl(f,button.MouseButton1Click,function()
   if disabled then return end
   w._bindingCapture=handle
   button.Text="Press a key..."
  end)
  handle:Set(o.Default or "None")
  table.insert(w._keybinds,handle)
- w:_register(o.Flag,handle)
+ w:_register(o.Flag,handle,f)
  redraw()
  return handle
 end
@@ -1241,11 +1386,14 @@ function Tab:CreateTextArea(o)
   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0
  },f)
  round(box,3)
+ w:_theme(box,"BackgroundColor3","raised")
+ w:_theme(box,"TextColor3","text")
+ w:_theme(box,"PlaceholderColor3","muted")
  local outline=make("UIStroke",{Color=w.colors.muted,Transparency=.55,Thickness=1},box)
- w._connections[#w._connections+1]=box.Focused:Connect(function()
+ w:_connectControl(f,box.Focused,function()
   outline.Color=w.colors.accent outline.Transparency=0
  end)
- w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+ w:_connectControl(f,box.FocusLost,function()
   outline.Color=w.colors.muted outline.Transparency=.55
  end)
  local handle={}
@@ -1256,8 +1404,15 @@ function Tab:CreateTextArea(o)
  function handle:Destroy()f:Destroy()end
  return handle
 end
-function Window:_register(flag,handle)
- if type(flag)=="string" and #flag>0 then self.flags[flag]=handle end
+function Window:_register(flag,handle,owner)
+ if type(flag)=="string" and #flag>0 then
+  self.flags[flag]=handle
+  if owner then
+   owner.Destroying:Connect(function()
+    if self.flags[flag]==handle then self.flags[flag]=nil end
+   end)
+  end
+ end
 end
 local memory={}
 local function configObject(win,kind)
@@ -1508,14 +1663,18 @@ function Lib:CreateWindow(o)
  local player=Players.LocalPlayer
  assert(player,"reefFish must run in a client LocalScript")
  local colors=table.clone(palettes[o.Theme] or palettes.MatrixInverse)
+ local initialWidth=math.max(330,o.Size and o.Size.X.Offset or 560)
+ local initialHeight=math.max(250,o.Size and o.Size.Y.Offset or 380)
  local w=setmetatable({
-  width=math.max(330,o.Size and o.Size.X.Offset or 560),height=math.max(250,o.Size and o.Size.Y.Offset or 380),
+  width=initialWidth,height=initialHeight,
+  requestedWidth=initialWidth,requestedHeight=initialHeight,
   colors=colors,themeName=palettes[o.Theme] and o.Theme or "MatrixInverse",
   rainEnabled=o.Rain~=false,rainDensity=.55,rainSpeed=.3,minimized=false,destroyed=false,
-  flags={},tabs={},_bound={},_connections={},_feedbackRefresh={},
+  flags={},tabs={},_bound={},_boundOwners={},_connections={},_feedbackRefresh={},
   _autosaveTargets={},_autosaveDue={},_importing=false,
   _keybinds={},_toasts={},enableToasts=o.Notifications~=false,hidden=false,
-  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16)
+  fs=storage(),borderThickness=math.clamp(tonumber(o.BorderThickness) or 5,3,16),
+  _controlConnections={}
  },Window)
  local requestedKey=o.ToggleKey or "RightShift"
  if typeof(requestedKey)=="EnumItem" then requestedKey=requestedKey.Name end
@@ -1586,7 +1745,7 @@ function Lib:CreateWindow(o)
   PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,6),
   PaddingRight=UDim.new(0,2),PaddingBottom=UDim.new(0,8)
  },w.nav)
- make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
+ w._navLayout=make("UIListLayout",{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder},w.nav)
  local navDivider=make("Frame",{
   Size=UDim2.new(0,1,1,0),Position=UDim2.new(.26,0,0,0),
   BorderSizePixel=0,ZIndex=7,Active=false
@@ -1672,7 +1831,7 @@ function Lib:CreateWindow(o)
   dragging=true
   dragTouch=i.UserInputType==Enum.UserInputType.Touch and i or nil
   dragStart=i.Position
-  startPos=w.root.Position
+  startPos=w.root.AbsolutePosition
  end)
  w._connections[#w._connections+1]=w._resizeGrip.InputBegan:Connect(function(i)
   if not isPointer(i) or w.minimized or dragging or w.destroyed then return end
@@ -1693,7 +1852,7 @@ function Lib:CreateWindow(o)
   local mouseMove=i.UserInputType==Enum.UserInputType.MouseMovement
   if dragging and (mouseMove and dragTouch==nil or i==dragTouch) then
    local diff=i.Position-dragStart
-   w.root.Position=UDim2.fromOffset(startPos.X.Offset+diff.X,startPos.Y.Offset+diff.Y)
+   w.root.Position=UDim2.fromOffset(startPos.X+diff.X,startPos.Y+diff.Y)
    w:_clampPosition()
   elseif resizing and (mouseMove and resizeTouch==nil or i==resizeTouch) then
    local diff=i.Position-resizeStart
