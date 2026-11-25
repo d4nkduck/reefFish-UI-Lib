@@ -1,11 +1,11 @@
--- reefFish UI Lib v0.3.0-alpha
+-- reefFish UI Lib v0.4.0-alpha
 -- MIT License | Console-style Roblox Luau UI
 local Players=game:GetService("Players")
 local UIS=game:GetService("UserInputService")
 local RunService=game:GetService("RunService")
 local HttpService=game:GetService("HttpService")
 local TweenService=game:GetService("TweenService")
-local Lib={Version="0.3.0-alpha"}
+local Lib={Version="0.4.0-alpha"}
 local palettes={
  MatrixInverse={bg=Color3.fromRGB(11,17,14),panel=Color3.fromRGB(16,26,20),raised=Color3.fromRGB(23,35,28),border=Color3.fromRGB(19,185,108),ink=Color3.fromRGB(6,59,35),accent=Color3.fromRGB(96,255,169),text=Color3.fromRGB(213,233,220),muted=Color3.fromRGB(129,161,140)},
  ClassicCRT={bg=Color3.fromRGB(8,13,9),panel=Color3.fromRGB(12,23,14),raised=Color3.fromRGB(19,42,25),border=Color3.fromRGB(19,135,72),ink=Color3.fromRGB(6,53,26),accent=Color3.fromRGB(86,237,134),text=Color3.fromRGB(215,242,215),muted=Color3.fromRGB(126,164,130)},
@@ -20,7 +20,7 @@ local function make(class,props,parent)
  x.Parent=parent
  return x
 end
-local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 4)},x) end
+local function round(x,n) make("UICorner",{CornerRadius=UDim.new(0,n or 6)},x) end
 local function fire(fn,...)
  if type(fn)=="function" then local ok,err=pcall(fn,...) if not ok then warn("[reefFish]",err) end end
 end
@@ -95,26 +95,33 @@ local Tab={} Tab.__index=Tab
 -- Small, central interaction-state engine: no per-control animation loops.
 function Window:_feedback(hitbox,surface)
  local state="normal"
- local function refresh()
+ local currentTween
+ local function refresh(animate)
   if not surface.Parent then return end
-  local base=self.colors.raised
+  local base=self.colors.panel
+  local target=base
   if state=="hover" then
-   surface.BackgroundColor3=base:Lerp(self.colors.accent,.16)
+   target=base:Lerp(self.colors.accent,.08)
   elseif state=="pressed" then
-   surface.BackgroundColor3=base:Lerp(self.colors.accent,.32)
+   target=base:Lerp(self.colors.accent,.16)
+  end
+  if currentTween then currentTween:Cancel() currentTween=nil end
+  if animate then
+   currentTween=TweenService:Create(surface,TweenInfo.new(.12,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundColor3=target})
+   currentTween:Play()
   else
-   surface.BackgroundColor3=base
+   surface.BackgroundColor3=target
   end
  end
- self._feedbackRefresh[#self._feedbackRefresh+1]=refresh
+ self._feedbackRefresh[#self._feedbackRefresh+1]=function()refresh(false)end
  local function add(signal,fn)
   self._connections[#self._connections+1]=signal:Connect(fn)
  end
- add(hitbox.MouseEnter,function()state="hover" refresh()end)
- add(hitbox.MouseLeave,function()state="normal" refresh()end)
- add(hitbox.MouseButton1Down,function()state="pressed" refresh()end)
- add(hitbox.MouseButton1Up,function()state="hover" refresh()end)
- refresh()
+ add(hitbox.MouseEnter,function()state="hover" refresh(true)end)
+ add(hitbox.MouseLeave,function()state="normal" refresh(true)end)
+ add(hitbox.MouseButton1Down,function()state="pressed" refresh(true)end)
+ add(hitbox.MouseButton1Up,function()state="hover" refresh(true)end)
+ refresh(false)
 end
 function Window:_markChanged(kind)
  if self._importing then return end
@@ -122,7 +129,7 @@ function Window:_markChanged(kind)
  if name then self._autosaveDue[kind]=os.clock()+1 end
 end
 function Window:SetBorderThickness(value)
- local n=math.clamp(math.floor(tonumber(value) or self.borderThickness),9,16)
+ local n=math.clamp(math.floor(tonumber(value) or self.borderThickness),3,16)
  self.borderThickness=n
  if self.inner then
   self.inner.Position=UDim2.fromOffset(n,n)
@@ -236,9 +243,14 @@ function Window:SetMinimized(value)
  self.root.Size=UDim2.fromOffset(self.width,self.minimized and (42+self.borderThickness*2) or self.height)
 end
 function Window:SelectTab(tab)
+ if not tab then return end
+ if self._closeDropdown then self._closeDropdown() end
  for _,t in ipairs(self.tabs) do
-  t.page.Visible=(t==tab)
-  t.button.BackgroundColor3=(t==tab) and self.colors.raised or self.colors.panel
+  local selected=t==tab
+  t.page.Visible=selected
+  t.button.BackgroundColor3=selected and self.colors.raised or self.colors.bg
+  t.button.TextColor3=selected and self.colors.accent or self.colors.muted
+  if t.indicator then t.indicator.Visible=selected end
  end
  self.active=tab
 end
@@ -263,34 +275,68 @@ function Window:Destroy()
 end
 function Window:CreateTab(opts)
  local name=type(opts)=="table" and (opts.Name or opts.Title) or opts or "TAB"
- local button=make("TextButton",{Text="> "..tostring(name),Size=UDim2.new(1,-8,0,34),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0,AutoButtonColor=false},self.nav)
- local page=make("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScrollBarThickness=4,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=false,BorderSizePixel=0},self.content)
- make("UIPadding",{PaddingTop=UDim.new(0,8),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)},page)
- make("UIListLayout",{Padding=UDim.new(0,7),SortOrder=Enum.SortOrder.LayoutOrder},page)
- local t=setmetatable({window=self,button=button,page=page},Tab)
- self:_theme(button,"TextColor3","accent")
- self:_theme(button,"BackgroundColor3","panel")
+ local button=make("TextButton",{
+  Text="  "..tostring(name),Size=UDim2.new(1,-10,0,32),
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  BorderSizePixel=0,AutoButtonColor=false
+ },self.nav)
+ round(button,5)
+ local indicator=make("Frame",{
+  Position=UDim2.fromOffset(0,7),Size=UDim2.fromOffset(2,18),
+  BorderSizePixel=0,Visible=false,Active=false
+ },button)
+ round(indicator,2)
+ self:_theme(indicator,"BackgroundColor3","accent")
+ local page=make("ScrollingFrame",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+  ScrollBarThickness=3,ScrollBarImageColor3=self.colors.muted,
+  AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),
+  Visible=false,BorderSizePixel=0
+ },self.content)
+ make("UIPadding",{
+  PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),
+  PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)
+ },page)
+ make("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder},page)
+ local t=setmetatable({window=self,button=button,page=page,indicator=indicator},Tab)
+ self:_theme(button,"TextColor3","muted")
+ self:_theme(button,"BackgroundColor3","bg")
  self.tabs[#self.tabs+1]=t
  self._connections[#self._connections+1]=button.MouseButton1Click:Connect(function()self:SelectTab(t)end)
+ self._connections[#self._connections+1]=button.MouseEnter:Connect(function()
+  if self.active~=t then button.BackgroundColor3=self.colors.panel end
+ end)
+ self._connections[#self._connections+1]=button.MouseLeave:Connect(function()
+  if self.active~=t then button.BackgroundColor3=self.colors.bg end
+ end)
  if #self.tabs==1 then self:SelectTab(t) end
  return t
 end
 function Tab:_base(height)
  local w=self.window
  local frame=make("Frame",{Size=UDim2.new(1,-4,0,height),BorderSizePixel=0},self.page)
- round(frame,4) w:_theme(frame,"BackgroundColor3","raised")
+ round(frame,6)
+ w:_theme(frame,"BackgroundColor3","panel")
  return frame
 end
 function Tab:CreateSection(name)
- local f=self:_base(27)
- local l=make("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-12,1,0),Position=UDim2.fromOffset(6,0),Text=tostring(name),Font=Enum.Font.Code,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left},f)
- self.window:_theme(l,"TextColor3","accent")
+ -- Sections are quiet dividers, not another raised card.
+ local f=make("Frame",{
+  Size=UDim2.new(1,-4,0,27),BackgroundTransparency=1,BorderSizePixel=0
+ },self.page)
+ local l=make("TextLabel",{
+  BackgroundTransparency=1,Size=UDim2.new(1,-12,1,0),
+  Position=UDim2.fromOffset(4,0),Text=tostring(name),
+  Font=Enum.Font.GothamBold,TextSize=11,
+  TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ self.window:_theme(l,"TextColor3","muted")
  return f
 end
 function Tab:CreateLabel(o)
  o=type(o)=="table" and o or {Text=o}
  local f=self:_base(32)
- local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(8,0),Size=UDim2.new(1,-16,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Code,TextSize=14,TextWrapped=true},f)
+ local l=make("TextLabel",{BackgroundTransparency=1,Position=UDim2.fromOffset(10,0),Size=UDim2.new(1,-20,1,0),Text=tostring(o.Text or ""),TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.Gotham,TextSize=12,TextWrapped=true},f)
  self.window:_theme(l,"TextColor3","text")
  return {
   SetText=function(_,v)l.Text=tostring(v)end,
@@ -300,37 +346,84 @@ function Tab:CreateLabel(o)
  }
 end
 function Tab:CreateButton(o)
+ o=o or {}
  local w=self.window
- local f=self:_base(36)
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Text="[ "..tostring(o.Name or "Button").." ]",Font=Enum.Font.Code,TextSize=15},f)
- w:_theme(b,"TextColor3","accent")
+ local f=self:_base(35)
+ local b=make("TextButton",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
+  Text="  "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
+  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
+ local arrow=make("TextLabel",{
+  Text="›",BackgroundTransparency=1,
+  Size=UDim2.fromOffset(18,30),Position=UDim2.new(1,-26,0,2),
+  Font=Enum.Font.Gotham,TextSize=20
+ },f)
+ w:_theme(b,"TextColor3","text")
+ w:_theme(arrow,"TextColor3","muted")
  w:_feedback(b,f)
  local disabled=false
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
  return {
-  SetDisabled=function(_,v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end,
+  SetDisabled=function(_,v)
+   disabled=v==true
+   b.TextTransparency=disabled and .55 or 0
+   arrow.TextTransparency=disabled and .55 or 0
+  end,
   SetVisible=function(_,v)f.Visible=v~=false end,
   Destroy=function()f:Destroy()end
  }
 end
 function Tab:CreateToggle(o)
+ o=o or {}
  local w=self.window
- local f=self:_base(37)
+ local f=self:_base(39)
  local value=o.Default==true
- local b=make("TextButton",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local b=make("TextButton",{
+  Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
+  Text="  "..tostring(o.Name or "Toggle"),Font=Enum.Font.GothamMedium,
+  TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
  w:_theme(b,"TextColor3","text")
+ local track=make("Frame",{
+  Size=UDim2.fromOffset(34,19),Position=UDim2.new(1,-45,.5,-9),
+  BorderSizePixel=0,BackgroundColor3=w.colors.raised,Active=false
+ },f)
+ round(track,10)
+ local knob=make("Frame",{
+  Size=UDim2.fromOffset(13,13),Position=UDim2.fromOffset(3,3),
+  BorderSizePixel=0,BackgroundColor3=w.colors.muted,Active=false
+ },track)
+ round(knob,7)
  w:_feedback(b,f)
  local disabled=false
- local function render()b.Text="  ["..(value and "X" or " ").."] "..tostring(o.Name or "Toggle")end
+ local function render(animate)
+  local targetColor=value and w.colors.accent or w.colors.raised
+  local knobColor=value and w.colors.bg or w.colors.muted
+  local targetPosition=UDim2.fromOffset(value and 18 or 3,3)
+  if animate then
+   TweenService:Create(track,TweenInfo.new(.15),{BackgroundColor3=targetColor}):Play()
+   TweenService:Create(knob,TweenInfo.new(.15),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
+  else
+   track.BackgroundColor3=targetColor
+   knob.Position=targetPosition
+   knob.BackgroundColor3=knobColor
+  end
+ end
+ w._feedbackRefresh[#w._feedbackRefresh+1]=function()render(false)end
  local handle={}
- function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  b.TextTransparency=disabled and .55 or 0
+  track.BackgroundTransparency=disabled and .45 or 0
+ end
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  function handle:Get()return value end
  function handle:Set(v,notify)
   if type(v)~="boolean" then return false end
   value=v
-  render()
+  render(true)
   if notify then
    if o.Flag then w:_markChanged("game") end
    fire(o.Callback,value)
@@ -341,7 +434,8 @@ function Tab:CreateToggle(o)
  w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
   if not disabled then handle:Set(not value,true) end
  end)
- render() return handle
+ render(false)
+ return handle
 end
 function Tab:CreateSlider(o)
  local w=self.window
