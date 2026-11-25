@@ -2250,24 +2250,27 @@ function Window:_profileManager(tab,kind,store,onImported)
   end
   report("Rename",ok,why)
  end})
- local confirmName,confirmUntil
- tab:CreateButton({Name="Delete selected profile (confirm twice)",Callback=function()
-  local target=picker:Get()
-  if not target then w:Notify("No saved profile selected","WARN") return end
-  if confirmName~=target or os.clock()>(confirmUntil or 0) then
-   confirmName=target
-   confirmUntil=os.clock()+5
-   w:Notify("Click Delete again within 5 seconds to remove "..target,"WARN")
-   return
+ tab:CreateButton({
+  Name="Delete selected profile",Variant="Danger",
+  Description="Confirm before removing a saved profile",
+  Callback=function()
+   local target=picker:Get()
+   if not target then w:Notify("No saved profile selected","WARN") return end
+   w:Confirm({
+    Title="Delete profile?",
+    Content="Permanently delete '"..tostring(target).."'? This cannot be undone.",
+    ConfirmText="Delete",Danger=true,
+    OnConfirm=function()
+     local ok,why=store:Delete(target)
+     if ok then
+      refresh()
+      if w._autosaveTargets[kind]==target then w._autosaveTargets[kind]=nil end
+     end
+     report("Delete",ok,why)
+    end
+   })
   end
-  confirmName=nil
-  local ok,why=store:Delete(target)
-  if ok then
-   refresh()
-   if w._autosaveTargets[kind]==target then w._autosaveTargets[kind]=nil end
-  end
-  report("Delete",ok,why)
- end})
+ })
  tab:CreateToggle({Name="Auto-save selected profile (this session)",Default=false,Callback=function(enabled)
   local name=profile:Get()
   if enabled and not validName(name) then
