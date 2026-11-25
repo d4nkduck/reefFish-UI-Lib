@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1-alpha — Usability and reliability pass
+
+- Add draggable bottom-right resize grip, public `SetSize`, viewport clamping and adaptive sidebar widths.
+- Make dragging and resizing handle mouse and touch input while preventing title-bar action clicks from moving the window.
+- Constrain dropdown popups to the viewport, cap rendered search results at 50, and retain multi-select scroll position.
+- Improve numeric input validation, focused/disabled feedback and avoid duplicate unchanged-value callbacks.
+- Auto-size paragraph text when `Height` is not explicitly set.
+- Expand Matrix rain columns when resizing and pause background rendering while the UI is hidden or minimized.
+- Preserve existing component, profile and loader APIs. The stable distribution remains `dist/reefFish.lua`.
+- Update Studio smoke demo. Static syntax checks passed; live Roblox runtime testing is still pending.
+
 ## 0.4.0-alpha — Refinement before differentiation
 
 - Slimmed the default inverse-Matrix bezel from 12 px to 5 px (range now 3–16 px) and softened the default rain density and speed.
