@@ -489,7 +489,7 @@ function Tab:CreateButton(o)
  w:_theme(arrow,"TextColor3","muted")
  w:_feedback(b,f)
  local disabled=false
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()if not disabled then fire(o.Callback)end end)
+ w:_connectControl(f,b.MouseButton1Click,function()if not disabled then fire(o.Callback)end end)
  return {
   SetDisabled=function(_,v)
    disabled=v==true
@@ -557,7 +557,7 @@ function Tab:CreateToggle(o)
   return true
  end
  w:_register(o.Flag,handle,f)
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
+ w:_connectControl(f,b.MouseButton1Click,function()
   if not disabled then handle:Set(not value,true) end
  end)
  render(false)
@@ -634,7 +634,7 @@ function Tab:CreateSlider(o)
   local fraction=math.clamp((pos.X-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
   handle:Set(min+fraction*(max-min),true)
  end
- w._connections[#w._connections+1]=bar.InputBegan:Connect(function(i)
+ w:_connectControl(f,bar.InputBegan,function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
    if not disabled then
     if not dragging then
@@ -755,7 +755,7 @@ function Tab:CreateDropdown(o)
   render()
   if w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
  end
- w._connections[#w._connections+1]=b.MouseButton1Click:Connect(function()
+ w:_connectControl(f,b.MouseButton1Click,function()
   if w.destroyed or disabled then return end
   if w._dropdownOwner==b and w._closeDropdown then
    w._closeDropdown()
@@ -933,7 +933,7 @@ function Tab:CreateInput(o)
   outline.Transparency=box:IsFocused() and 0 or .5
  end
  w._feedbackRefresh[#w._feedbackRefresh+1]={owner=f,refresh=refreshOutline}
- w._connections[#w._connections+1]=box.Focused:Connect(refreshOutline)
+ w:_connectControl(f,box.Focused,refreshOutline)
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
@@ -960,7 +960,7 @@ function Tab:CreateInput(o)
   end
   return true
  end
- w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+ w:_connectControl(f,box.FocusLost,function()
   refreshOutline()
   if disabled then return end
   if o.Numeric and tonumber(box.Text)==nil then
@@ -1003,7 +1003,7 @@ function Tab:CreateParagraph(o)
   end
  end
  if autoHeight then
-  w._connections[#w._connections+1]=content:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHeight)
+  w:_connectControl(f,content:GetPropertyChangedSignal("AbsoluteSize"),updateHeight)
   task.defer(updateHeight)
  end
  local handle={}
@@ -1103,6 +1103,8 @@ function Tab:CreateColorPicker(o)
   BackgroundColor3=w.colors.panel,TextColor3=w.colors.accent
  },f)
  round(hex,3)
+ w:_theme(hex,"BackgroundColor3","panel")
+ w:_theme(hex,"TextColor3","accent")
  local outline=make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.5},hex)
  local rgbFields={}
  local rgbCaptions={}
@@ -1113,6 +1115,7 @@ function Tab:CreateColorPicker(o)
    BackgroundTransparency=1,Text=name,TextColor3=w.colors.muted,
    Font=Enum.Font.Gotham,TextSize=12
   },f)
+  w:_theme(caption,"TextColor3","muted")
   rgbCaptions[channel]=caption
   local field=make("TextBox",{
    Position=UDim2.new(fraction,28,0,191),Size=UDim2.new(1/3,-34,0,25),
@@ -1121,6 +1124,8 @@ function Tab:CreateColorPicker(o)
    ClearTextOnFocus=false,Text="0"
   },f)
   round(field,3)
+  w:_theme(field,"BackgroundColor3","panel")
+  w:_theme(field,"TextColor3","accent")
   rgbFields[channel]=field
  end
  local function repaint()
@@ -1148,10 +1153,10 @@ function Tab:CreateColorPicker(o)
  end
  function handle:SetExpanded(v)setExpanded(v)end
  function handle:GetExpanded()return expanded end
- w._connections[#w._connections+1]=heading.MouseButton1Click:Connect(function()
+ w:_connectControl(f,heading.MouseButton1Click,function()
   if not disabled then setExpanded(not expanded) end
  end)
- w._connections[#w._connections+1]=swatch.MouseButton1Click:Connect(function()
+ w:_connectControl(f,swatch.MouseButton1Click,function()
   if not disabled then setExpanded(not expanded) end
  end)
  function handle:Get()return Color3.fromHSV(hue,saturation,value)end
@@ -1196,7 +1201,7 @@ function Tab:CreateColorPicker(o)
   if o.Flag then w:_markChanged("game") end
   fire(o.Callback,handle:Get())
  end
- w._connections[#w._connections+1]=picker.InputBegan:Connect(function(i)
+ w:_connectControl(f,picker.InputBegan,function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
    if not dragging then
     dragging="sv"
@@ -1205,7 +1210,7 @@ function Tab:CreateColorPicker(o)
    end
   end
  end)
- w._connections[#w._connections+1]=hueBar.InputBegan:Connect(function(i)
+ w:_connectControl(f,hueBar.InputBegan,function(i)
   if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
    if not dragging then
     dragging="hue"
@@ -1228,13 +1233,13 @@ function Tab:CreateColorPicker(o)
    dragTouch=nil
   end
  end)
- w._connections[#w._connections+1]=hex.Focused:Connect(function()outline.Color=w.colors.accent outline.Transparency=0 end)
- w._connections[#w._connections+1]=hex.FocusLost:Connect(function()
+ w:_connectControl(f,hex.Focused,function()outline.Color=w.colors.accent outline.Transparency=0 end)
+ w:_connectControl(f,hex.FocusLost,function()
   outline.Color=w.colors.muted outline.Transparency=.5
   if not handle:Set(hex.Text,true) then hex.Text=handle:GetHex() end
  end)
  for _,field in ipairs(rgbFields) do
-  w._connections[#w._connections+1]=field.FocusLost:Connect(function()
+  w:_connectControl(f,field.FocusLost,function()
    local rgb={}
    for i,box in ipairs(rgbFields) do rgb[i]=tonumber(box.Text) end
    if rgb[1] and rgb[2] and rgb[3] then
@@ -1271,6 +1276,8 @@ function Tab:CreateKeybind(o)
   Text="None",Font=Enum.Font.GothamMedium,TextSize=12,BorderSizePixel=0
  },f)
  round(button,3)
+ w:_theme(button,"BackgroundColor3","raised")
+ w:_theme(button,"TextColor3","accent")
  local selected=nil
  local active=false
  local disabled=false
@@ -1320,7 +1327,7 @@ function Tab:CreateKeybind(o)
    fire(o.Callback,active,selected)
   end
  end
- w._connections[#w._connections+1]=button.MouseButton1Click:Connect(function()
+ w:_connectControl(f,button.MouseButton1Click,function()
   if disabled then return end
   w._bindingCapture=handle
   button.Text="Press a key..."
@@ -1353,11 +1360,14 @@ function Tab:CreateTextArea(o)
   Font=Enum.Font.Code,TextSize=12,BorderSizePixel=0
  },f)
  round(box,3)
+ w:_theme(box,"BackgroundColor3","raised")
+ w:_theme(box,"TextColor3","text")
+ w:_theme(box,"PlaceholderColor3","muted")
  local outline=make("UIStroke",{Color=w.colors.muted,Transparency=.55,Thickness=1},box)
- w._connections[#w._connections+1]=box.Focused:Connect(function()
+ w:_connectControl(f,box.Focused,function()
   outline.Color=w.colors.accent outline.Transparency=0
  end)
- w._connections[#w._connections+1]=box.FocusLost:Connect(function()
+ w:_connectControl(f,box.FocusLost,function()
   outline.Color=w.colors.muted outline.Transparency=.55
  end)
  local handle={}
