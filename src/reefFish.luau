@@ -810,9 +810,14 @@ function Tab:CreateMultiDropdown(o)
  return self:CreateDropdown(o)
 end
 function Tab:CreateInput(o)
+ o=o or {}
  local w=self.window
  local f=self:_base(63)
- local name=make("TextLabel",{Text=tostring(o.Name or "Input"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local name=make("TextLabel",{
+  Text=tostring(o.Name or "Input"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-20,0,25),Position=UDim2.fromOffset(10,0),
+  Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left
+ },f)
  w:_theme(name,"TextColor3","text")
  local box=make("TextBox",{
   Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),
@@ -824,34 +829,64 @@ function Tab:CreateInput(o)
  w:_theme(box,"TextColor3","text")
  w:_theme(box,"BackgroundColor3","raised")
  w:_theme(box,"PlaceholderColor3","muted")
- local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.45},box)
- w._connections[#w._connections+1]=box.Focused:Connect(function()
-  outline.Color=w.colors.accent outline.Transparency=0
- end)
+ local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.5},box)
+ local disabled=false
+ local lastCommitted=box.Text
+ local function refreshOutline()
+  if not box.Parent then return end
+  outline.Color=box:IsFocused() and w.colors.accent or w.colors.muted
+  outline.Transparency=box:IsFocused() and 0 or .5
+ end
+ w._feedbackRefresh[#w._feedbackRefresh+1]=refreshOutline
+ w._connections[#w._connections+1]=box.Focused:Connect(refreshOutline)
  local handle={}
- function handle:SetDisabled(v)box.TextEditable=v~=true end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  box.TextEditable=not disabled
+  box.TextTransparency=disabled and .55 or 0
+  name.TextTransparency=disabled and .5 or 0
+  if disabled and box:IsFocused() then box:ReleaseFocus() end
+ end
  function handle:SetVisible(v)f.Visible=v~=false end
  function handle:Destroy()f:Destroy()end
  function handle:Get()return box.Text end
+ function handle:Focus()
+  if not disabled and box.Parent then box:CaptureFocus() end
+ end
  function handle:Set(v,notify)
-  if o.Numeric and tonumber(v)==nil then return end
-  box.Text=tostring(v)
-  if notify then w:_markChanged("game") fire(o.Callback,box.Text) end
+  if o.Numeric and tonumber(v)==nil then return false end
+  local nextValue=tostring(v)
+  local changed=nextValue~=lastCommitted
+  box.Text=nextValue
+  lastCommitted=nextValue
+  if notify and changed then
+   if o.Flag then w:_markChanged("game") end
+   fire(o.Callback,nextValue)
+  end
+  return true
  end
  w._connections[#w._connections+1]=box.FocusLost:Connect(function()
-  outline.Color=w.colors.muted outline.Transparency=.45
-  if not o.Numeric or tonumber(box.Text) then
-   if o.Flag then w:_markChanged("game") end
-   fire(o.Callback,box.Text)
+  refreshOutline()
+  if disabled then return end
+  if o.Numeric and tonumber(box.Text)==nil then
+   box.Text=lastCommitted
+   outline.Color=Color3.fromRGB(240,120,120)
+   outline.Transparency=0
+   w:Notify("Enter a valid number for "..tostring(o.Name or "Input"),"WARN")
+   return
   end
+  handle:Set(box.Text,true)
  end)
- w:_register(o.Flag,handle) return handle
+ w:_register(o.Flag,handle)
+ return handle
 end
 -- A readable paragraph card for long help or diagnostic descriptions.
 function Tab:CreateParagraph(o)
  o=o or {}
  local w=self.window
- local f=self:_base(math.clamp(tonumber(o.Height) or 82,56,220))
+ local fixedHeight=tonumber(o.Height)
+ local autoHeight=fixedHeight==nil
+ local f=self:_base(fixedHeight and math.clamp(fixedHeight,56,220) or 56)
  local heading=make("TextLabel",{
   Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
@@ -859,12 +894,23 @@ function Tab:CreateParagraph(o)
  },f)
  w:_theme(heading,"TextColor3","accent")
  local content=make("TextLabel",{
-  Position=UDim2.fromOffset(10,30),Size=UDim2.new(1,-20,1,-36),
+  Position=UDim2.fromOffset(10,30),
+  Size=autoHeight and UDim2.new(1,-20,0,0) or UDim2.new(1,-20,1,-36),
+  AutomaticSize=autoHeight and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
   TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
   Font=Enum.Font.Gotham,TextSize=12,Text=tostring(o.Content or "")
  },f)
  w:_theme(content,"TextColor3","text")
+ local function updateHeight()
+  if autoHeight and f.Parent then
+   f.Size=UDim2.new(1,-4,0,math.max(56,math.min(1200,content.AbsoluteSize.Y+38)))
+  end
+ end
+ if autoHeight then
+  w._connections[#w._connections+1]=content:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHeight)
+  task.defer(updateHeight)
+ end
  local handle={}
  function handle:Set(title,body)
   if type(title)=="table" then
@@ -874,6 +920,7 @@ function Tab:CreateParagraph(o)
    heading.Text=tostring(title or heading.Text)
    if body~=nil then content.Text=tostring(body) end
   end
+  if autoHeight then task.defer(updateHeight) end
  end
  function handle:Get()return {Title=heading.Text,Content=content.Text}end
  function handle:SetVisible(v)f.Visible=v~=false end
