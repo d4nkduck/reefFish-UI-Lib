@@ -1,25 +1,25 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.4.2-alpha  
+**Version:** 0.4.3-alpha  
 **License:** MIT  
-**Status:** Usability refinement alpha — existing component APIs remain compatible
+**Status:** Visual system alpha — existing component APIs remain compatible
 
-A compact Roblox Luau UI library with a familiar, polished control layout and an optional inverse-Matrix bezel. Built for game debug tooling and reusable in client-side Roblox Studio projects.
+A modern Roblox Luau UI library with grouped settings, deliberate typography and an optional inverse-Matrix border. Built for game debug tooling and reusable in client-side Roblox Studio projects.
 
 This is an **early alpha**, not a production-hardened full-featured library. No external requests or third-party modules are needed to display its UI. Both the source and single-file build are included.
 
 ## Refinement priorities
 
-Polish and reliability take priority over unusual new features. Default sizing and spacing should feel familiar even with rain disabled. The existing custom themes remain selectable.
+The interface must look complete without visual effects. Shared design tokens govern spacing, typography, corners and control sizes. Matrix rain is optional and off by default; the five themes remain available.
 
 ## What works today
 
 - Draggable/resizable window with tracked mouse/touch gestures, restore-on-grow sizing, horizontal mobile tabs, minimize/close, status line and toasts
-- Slim (5 px default, configurable 3–16 px) inverse-Matrix bezel revealing a single vertical falling-code field that slowly scrolls right, up to ~10 Hz
+- Slim (4 px default, configurable 3–16 px) matte frame. Inverse-Matrix border rain is available with `Rain=true` or via the Appearance tab, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
 - UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, searchable single/multi-select dropdowns, colour picker (HSV/HEX), keybinds (Press/Toggle/Hold), paragraphs and text inputs
-- Built-in Appearance and Config tabs with named profile management, editable accent colour and JSON import/export (unless disabled)
-- Hover/pressed button feedback, focused text input outlines, and themed slider handles
+- Built-in Appearance and Profiles tabs with named profile management, editable accent colour and JSON import/export (unless disabled)
+- Grouped settings surfaces, button variants, optional descriptions, focused inputs, restrained hover feedback and themed slider handles
 - Appearance editor: theme, rain toggle, density, speed and live border thickness (3–16px)
 - Profile browsing, named save/load, rename/delete with confirmation, JSON import/export and optional debounced autosave
 - Capped, animated on-screen toast notifications, built-in status line and safe component callback dispatch with `pcall`
@@ -79,8 +79,8 @@ print(ok, reason)
 
 - `tab:CreateSection("TEXT")`
 - `tab:CreateLabel({Text="TEXT"})` → `:SetText(text)`
-- `tab:CreateButton({Name="NAME", Callback=function() end})` → `:SetDisabled(bool)`
-- `tab:CreateToggle({Name="NAME", Flag="unique-id", Default=false, Callback=function(bool) end})` → `:Get()`, `:Set(bool, fireCallback)`
+- `tab:CreateButton({Name="NAME", Variant="Secondary", Description="Optional detail", Callback=function() end})` → `:SetDisabled(bool)`. Variants: `Primary`, `Secondary` (default), `Danger`.
+- `tab:CreateToggle({Name="NAME", Description="Optional detail", Flag="unique-id", Default=false, Callback=function(bool) end})` → `:Get()`, `:Set(bool, fireCallback)`
 - `tab:CreateSlider({Name="NAME", Flag="unique-id", Min=0, Max=100, Increment=1, Default=25, Callback=function(number) end})` → `:Get()`, `:Set(number, fireCallback)`
 - `tab:CreateDropdown({Name="NAME", Flag="unique-id", Options={"A","B"}, Default="A", Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
 - `tab:CreateInput({Name="NAME", Flag="unique-id", Default="text", Numeric=false, Callback=function(string) end})` → `:Get()`, `:Set(value, fireCallback)`
@@ -135,6 +135,16 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 ## License
 
 MIT. See `LICENSE`.
+## v0.4.3 visual system
+
+- Redesigned the workspace around a neutral matte frame, spacious header and more readable 600×420 default layout.
+- Section headings now create **shared grouped settings surfaces** instead of stacking a separate card for every control.
+- Standardised typography, spacing, corner radii, heights, field borders and subtler interactive states with `ReefFish.Design` tokens.
+- Added action variants (`Primary`, `Secondary`, `Danger`) and optional `Description` text on buttons and toggles.
+- Restyled sliders, dropdowns, inputs, colour picker, keybinds, notifications and navigation to share the same visual language.
+- Rebalanced the five themes. Matrix rain is **off by default** and can be enabled with `Rain=true`; the border remains available without dominating the interface.
+- Kept constructors, public component methods, existing saved profile formats and `dist/reefFish.lua` unchanged in structure. Roblox rendering still needs an in-game visual review.
+
 ## v0.4.2 stability pass
 
 - **No jumping on drag:** title-bar dragging uses the actual pixel position.
