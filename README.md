@@ -1,6 +1,6 @@
 # reefFish UI Lib 🐟
 
-**Version:** 0.4.1-alpha  
+**Version:** 0.4.2-alpha  
 **License:** MIT  
 **Status:** Usability refinement alpha — existing component APIs remain compatible
 
@@ -14,7 +14,7 @@ Polish and reliability take priority over unusual new features. Default sizing a
 
 ## What works today
 
-- Draggable and resizable window with touch/mouse support, automatic viewport fitting, minimize/close buttons, status line and toasts
+- Draggable/resizable window with tracked mouse/touch gestures, restore-on-grow sizing, horizontal mobile tabs, minimize/close, status line and toasts
 - Slim (5 px default, configurable 3–16 px) inverse-Matrix bezel revealing a single vertical falling-code field that slowly scrolls right, up to ~10 Hz
 - Five colour themes: MatrixInverse, ClassicCRT, AmberTerminal, IceConsole and Monochrome
 - UI controls: tabs, sections, labels, buttons, toggles, sliders with handles, searchable single/multi-select dropdowns, colour picker (HSV/HEX), keybinds (Press/Toggle/Hold), paragraphs and text inputs
@@ -28,11 +28,11 @@ Polish and reliability take priority over unusual new features. Default sizing a
 - Best-effort storage adapter for environments with `writefile`/`readfile`/`makefolder`; in-memory fallback in normal clients
 - Namespaced profiles by Roblox `game.GameId`, JSON-encoded with HttpService
 - Config loading **does not run user callbacks by default**
-- Cleanup of event connections when the window closes
+- Cleanup of input listeners, keybinds, saved flags and theme references when controls or the window close
 
 ## What is planned, not implemented
 
-Still planned: full phone/tablet usability validation, accessibility and keyboard navigation for all controls, graphs, richer log drawer, notification actions, automated tests across Roblox clients, multi-window support, cross-session auto-load and custom theme import/export. The window now resizes and clamps to the viewport, but in-game testing on small devices is outstanding.
+Still planned: full phone/tablet usability validation, accessibility and keyboard navigation for all controls, graphs, richer log drawer, notification actions, automated tests across Roblox clients, multi-window support, cross-session auto-load and custom theme import/export. The window now also restores its requested size after temporary viewport shrinkage, but real mobile testing is still outstanding.
 
 ## Installation (Roblox Studio)
 
@@ -135,6 +135,17 @@ Issues and pull requests are welcome when the GitHub repository is published. Ke
 ## License
 
 MIT. See `LICENSE`.
+## v0.4.2 stability pass
+
+- **No jumping on drag:** title-bar dragging uses the actual pixel position.
+- **Reversible resizing:** the window remembers the requested dimensions when a phone/tablet viewport temporarily shrinks.
+- **Mobile navigation:** a horizontal, scrollable tab rail replaces the vertical sidebar at widths below 420px. The colour picker's RGB inputs also resize.
+- **Large dropdowns:** virtual scrolling reuses visible option buttons, with no arbitrary 50-item cutoff. Search and multi-selection remain.
+- **Touch handling:** slider and colour picker gestures track the originating touch instead of responding to unrelated fingers.
+- **Cleanup:** destroyed controls remove their event listeners, profile flags, keybind registrations and theme-feedback references. Destroying a window explicitly disconnects the viewport watcher.
+- **Polish:** the minimized status bar no longer overlaps the header; keybind, text-area and colour-picker fields follow the chosen theme.
+- **Validation:** use `examples/basic.luau` to test 120-option scrolling, resizing, profile flags and theme changes. Static checks passed; **Roblox-runtime validation remains pending**.
+
 ## v0.4.1 usability pass
 
 - **Resize:** drag the bottom-right grip, or call `window:SetSize(width,height)`.
