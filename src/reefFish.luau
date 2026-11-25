@@ -723,11 +723,19 @@ function Tab:CreateMultiDropdown(o)
 end
 function Tab:CreateInput(o)
  local w=self.window
- local f=self:_base(64)
- local name=make("TextLabel",{Text=tostring(o.Name or "Input"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local f=self:_base(63)
+ local name=make("TextLabel",{Text=tostring(o.Name or "Input"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(name,"TextColor3","text")
- local box=make("TextBox",{Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),ClearTextOnFocus=false,Size=UDim2.new(1,-14,0,29),Position=UDim2.fromOffset(7,28),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0},f)
- w:_theme(box,"TextColor3","accent")w:_theme(box,"BackgroundColor3","panel")
+ local box=make("TextBox",{
+  Text=tostring(o.Default or ""),PlaceholderText=tostring(o.Placeholder or ""),
+  ClearTextOnFocus=false,Size=UDim2.new(1,-20,0,29),
+  Position=UDim2.fromOffset(10,28),Font=Enum.Font.Gotham,TextSize=12,
+  TextXAlignment=Enum.TextXAlignment.Left,BorderSizePixel=0
+ },f)
+ round(box,5)
+ w:_theme(box,"TextColor3","text")
+ w:_theme(box,"BackgroundColor3","raised")
+ w:_theme(box,"PlaceholderColor3","muted")
  local outline=make("UIStroke",{Thickness=1,Color=w.colors.muted,Transparency=.45},box)
  w._connections[#w._connections+1]=box.Focused:Connect(function()
   outline.Color=w.colors.accent outline.Transparency=0
@@ -757,16 +765,16 @@ function Tab:CreateParagraph(o)
  local w=self.window
  local f=self:_base(math.clamp(tonumber(o.Height) or 82,56,220))
  local heading=make("TextLabel",{
-  Position=UDim2.fromOffset(9,5),Size=UDim2.new(1,-18,0,23),
+  Position=UDim2.fromOffset(10,5),Size=UDim2.new(1,-20,0,23),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
-  Font=Enum.Font.Code,TextSize=15,Text=tostring(o.Title or "INFORMATION")
+  Font=Enum.Font.GothamBold,TextSize=12,Text=tostring(o.Title or "INFORMATION")
  },f)
  w:_theme(heading,"TextColor3","accent")
  local content=make("TextLabel",{
-  Position=UDim2.fromOffset(9,30),Size=UDim2.new(1,-18,1,-36),
+  Position=UDim2.fromOffset(10,30),Size=UDim2.new(1,-20,1,-36),
   BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Left,
   TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true,
-  Font=Enum.Font.Code,TextSize=13,Text=tostring(o.Content or "")
+  Font=Enum.Font.Gotham,TextSize=12,Text=tostring(o.Content or "")
  },f)
  w:_theme(content,"TextColor3","text")
  local handle={}
