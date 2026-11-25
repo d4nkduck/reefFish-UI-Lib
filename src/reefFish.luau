@@ -528,7 +528,7 @@ function Tab:CreateDropdown(o)
  -- Searchable popup, rendered at ScreenGui level to escape scrolling-frame clipping.
  o=o or {}
  local w=self.window
- local f=self:_base(70)
+ local f=self:_base(66)
 
  local opts=o.Options or {}
  local multi=o.Multi==true
@@ -543,15 +543,30 @@ function Tab:CreateDropdown(o)
  else
   value=table.find(opts,o.Default) and o.Default or opts[1]
  end
- local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.Code,TextSize=14,TextXAlignment=Enum.TextXAlignment.Left},f)
+ local lab=make("TextLabel",{Text=tostring(o.Name or "Dropdown"),BackgroundTransparency=1,Size=UDim2.new(1,-12,0,25),Position=UDim2.fromOffset(6,0),Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left},f)
  w:_theme(lab,"TextColor3","text")
- local b=make("TextButton",{Size=UDim2.new(1,-14,0,31),Position=UDim2.fromOffset(7,30),Font=Enum.Font.Code,TextSize=13,BorderSizePixel=0,AutoButtonColor=false},f)
- w:_theme(b,"TextColor3","accent")
- w:_theme(b,"BackgroundColor3","panel")
- w:_feedback(b,f)
+ local b=make("TextButton",{
+  Size=UDim2.new(1,-20,0,30),Position=UDim2.fromOffset(10,29),
+  Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,
+  TextTruncate=Enum.TextTruncate.AtEnd,
+  BorderSizePixel=0,AutoButtonColor=false
+ },f)
+ round(b,5)
+ w:_theme(b,"TextColor3","text")
+ w:_theme(b,"BackgroundColor3","raised")
+ local chevron=make("TextLabel",{
+  Text="⌄",BackgroundTransparency=1,Size=UDim2.fromOffset(18,28),
+  Position=UDim2.new(1,-34,0,30),Font=Enum.Font.GothamBold,TextSize=15
+ },f)
+ w:_theme(chevron,"TextColor3","muted")
  local handle={}
  local disabled=false
- function handle:SetDisabled(v)disabled=v==true b.TextTransparency=disabled and .5 or 0 end
+ function handle:SetDisabled(v)
+  disabled=v==true
+  b.TextTransparency=disabled and .55 or 0
+  chevron.TextTransparency=disabled and .55 or 0
+  if disabled and w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
+ end
  function handle:SetVisible(v)
   f.Visible=v~=false
   if not f.Visible and w._dropdownOwner==b and w._closeDropdown then w._closeDropdown() end
@@ -561,8 +576,8 @@ function Tab:CreateDropdown(o)
   f:Destroy()
  end
  local function render()
-  if multi then b.Text=(#value==0 and "Select..." or table.concat(value,", ")).."  ▾"
-  else b.Text=tostring(value or "Select...").."  ▾" end
+  if multi then b.Text="  "..(#value==0 and "Select..." or table.concat(value,", "))
+  else b.Text="  "..tostring(value or "Select...") end
  end
  function handle:Get()
   if not multi then return value end
@@ -616,7 +631,7 @@ function Tab:CreateDropdown(o)
   local panel=make("Frame",{Size=UDim2.fromOffset(panelWidth,panelHeight),BorderSizePixel=0,ZIndex=102},overlay)
   panel.BackgroundColor3=w.colors.panel
   round(panel,5)
-  make("UIStroke",{Color=w.colors.border,Thickness=1},panel)
+  make("UIStroke",{Color=w.colors.muted,Thickness=1,Transparency=.55},panel)
   local function positionPanel()
    local viewport=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
    local x=math.clamp(b.AbsolutePosition.X,6,math.max(6,viewport.X-panelWidth-6))
@@ -630,7 +645,7 @@ function Tab:CreateDropdown(o)
    Size=UDim2.new(1,-12,0,29),Position=UDim2.fromOffset(6,6),
    BackgroundColor3=w.colors.raised,TextColor3=w.colors.text,
    PlaceholderColor3=w.colors.muted,PlaceholderText="Search options...",
-   Text="",ClearTextOnFocus=false,Font=Enum.Font.Code,TextSize=13,
+   Text="",ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12,
    BorderSizePixel=0,ZIndex=104
   },panel)
   round(search,3)
@@ -653,12 +668,18 @@ function Tab:CreateDropdown(o)
      local item=make("TextButton",{
       Text=((multi and table.find(value,chosen)~=nil or chosen==value) and "✓  " or "   ")..label,
       Size=UDim2.new(1,-4,0,28),BackgroundColor3=w.colors.raised,
-      TextColor3=chosen==value and w.colors.accent or w.colors.text,
-      BorderSizePixel=0,Font=Enum.Font.Code,TextSize=13,
+      TextColor3=(multi and table.find(value,chosen)~=nil or chosen==value) and w.colors.accent or w.colors.text,
+      BorderSizePixel=0,Font=Enum.Font.Gotham,TextSize=12,
       TextXAlignment=Enum.TextXAlignment.Left,ZIndex=105
      },list)
-     round(item,3)
-     optionButtons[#optionButtons+1]=item
+     round(item,4)
+      item.MouseEnter:Connect(function()
+       if item.Parent then item.BackgroundColor3=w.colors.raised:Lerp(w.colors.accent,.10) end
+      end)
+      item.MouseLeave:Connect(function()
+       if item.Parent then item.BackgroundColor3=w.colors.raised end
+      end)
+      optionButtons[#optionButtons+1]=item
      item.MouseButton1Click:Connect(function()
       if multi then
        local nextValue=table.clone(value)
