@@ -618,7 +618,8 @@ end
 function Tab:CreateButton(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.button)
+ local hasDescription=type(o.Description)=="string" and o.Description~=""
+ local f=self:_base(hasDescription and 59 or Design.height.button)
  local variant=string.lower(tostring(o.Variant or o.Style or "secondary"))
  if variant~="primary" and variant~="danger" then variant="secondary" end
  local colored=variant~="secondary"
@@ -629,17 +630,31 @@ function Tab:CreateButton(o)
  end
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
-  Text="   "..tostring(o.Name or "Button"),Font=Enum.Font.GothamMedium,
-  TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
-  TextTruncate=Enum.TextTruncate.AtEnd
+  Text="",BorderSizePixel=0
  },f)
+ local name=make("TextLabel",{
+  Text=tostring(o.Name or "Button"),BackgroundTransparency=1,
+  Size=UDim2.new(1,-60,0,24),Position=UDim2.fromOffset(13,hasDescription and 7 or 8),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ local detail
+ if hasDescription then
+  detail=make("TextLabel",{
+   Text=o.Description,BackgroundTransparency=1,
+   Size=UDim2.new(1,-65,0,19),Position=UDim2.fromOffset(13,30),
+   Font=Enum.Font.Gotham,TextSize=Design.type.caption,
+   TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+  },f)
+ end
  local arrow=make("TextLabel",{
   Text="→",BackgroundTransparency=1,
   Size=UDim2.fromOffset(19,28),Position=UDim2.new(1,-31,.5,-14),
   Font=Enum.Font.GothamMedium,TextSize=17
  },f)
- w:_theme(b,"TextColor3",colored and "bg" or "text")
+ w:_theme(name,"TextColor3",colored and "bg" or "text")
  w:_theme(arrow,"TextColor3",colored and "bg" or "muted")
+ if detail then w:_theme(detail,"TextColor3",colored and "bg" or "muted") end
  w:_feedback(b,f,colored and variant=="danger" and "danger" or (colored and "accent" or "panel"))
  local disabled=false
  w:_connectControl(f,b.MouseButton1Click,function()
@@ -648,8 +663,9 @@ function Tab:CreateButton(o)
  return {
   SetDisabled=function(_,v)
    disabled=v==true
-   b.TextTransparency=disabled and .55 or 0
+   name.TextTransparency=disabled and .55 or 0
    arrow.TextTransparency=disabled and .55 or 0
+   if detail then detail.TextTransparency=disabled and .6 or 0 end
   end,
   SetVisible=function(_,v)f.Visible=v~=false end,
   Destroy=function()f:Destroy()end
@@ -658,22 +674,38 @@ end
 function Tab:CreateToggle(o)
  o=o or {}
  local w=self.window
- local f=self:_base(Design.height.toggle)
+ local hasDescription=type(o.Description)=="string" and o.Description~=""
+ local f=self:_base(hasDescription and 62 or Design.height.toggle)
  local value=o.Default==true
  local b=make("TextButton",{
   Size=UDim2.fromScale(1,1),BackgroundTransparency=1,AutoButtonColor=false,
-  Text="   "..tostring(o.Name or "Toggle"),Font=Enum.Font.GothamMedium,
-  TextSize=Design.type.body,TextXAlignment=Enum.TextXAlignment.Left,
-  TextTruncate=Enum.TextTruncate.AtEnd
+  Text="",BorderSizePixel=0
  },f)
- w:_theme(b,"TextColor3","text")
+ local name=make("TextLabel",{
+  Text=tostring(o.Name or "Toggle"),BackgroundTransparency=1,
+  Position=UDim2.fromOffset(13,hasDescription and 8 or 10),
+  Size=UDim2.new(1,-82,0,25),
+  Font=Enum.Font.GothamMedium,TextSize=Design.type.body,
+  TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+ },f)
+ w:_theme(name,"TextColor3","text")
+ local detail
+ if hasDescription then
+  detail=make("TextLabel",{
+   Text=o.Description,BackgroundTransparency=1,
+   Position=UDim2.fromOffset(13,34),Size=UDim2.new(1,-85,0,18),
+   Font=Enum.Font.Gotham,TextSize=Design.type.caption,
+   TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd
+  },f)
+  w:_theme(detail,"TextColor3","muted")
+ end
  local track=make("Frame",{
-  Size=UDim2.fromOffset(38,21),Position=UDim2.new(1,-50,.5,-10),
+  Size=UDim2.fromOffset(40,22),Position=UDim2.new(1,-54,.5,-11),
   BorderSizePixel=0,BackgroundColor3=w.colors.raised,Active=false
  },f)
- round(track,10)
+ round(track,11)
  local knob=make("Frame",{
-  Size=UDim2.fromOffset(15,15),Position=UDim2.fromOffset(3,3),
+  Size=UDim2.fromOffset(16,16),Position=UDim2.fromOffset(3,3),
   BorderSizePixel=0,BackgroundColor3=w.colors.muted,Active=false
  },track)
  round(knob,8)
@@ -682,10 +714,10 @@ function Tab:CreateToggle(o)
  local function render(animate)
   local targetColor=value and w.colors.accent or w.colors.raised
   local knobColor=value and w.colors.bg or w.colors.muted
-  local targetPosition=UDim2.fromOffset(value and 20 or 3,3)
+  local targetPosition=UDim2.fromOffset(value and 21 or 3,3)
   if animate then
-   TweenService:Create(track,TweenInfo.new(.15),{BackgroundColor3=targetColor}):Play()
-   TweenService:Create(knob,TweenInfo.new(.15),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
+   TweenService:Create(track,TweenInfo.new(.16),{BackgroundColor3=targetColor}):Play()
+   TweenService:Create(knob,TweenInfo.new(.16),{Position=targetPosition,BackgroundColor3=knobColor}):Play()
   else
    track.BackgroundColor3=targetColor
    knob.Position=targetPosition
@@ -696,7 +728,8 @@ function Tab:CreateToggle(o)
  local handle={}
  function handle:SetDisabled(v)
   disabled=v==true
-  b.TextTransparency=disabled and .55 or 0
+  name.TextTransparency=disabled and .55 or 0
+  if detail then detail.TextTransparency=disabled and .55 or 0 end
   track.BackgroundTransparency=disabled and .45 or 0
  end
  function handle:SetVisible(v)f.Visible=v~=false end
