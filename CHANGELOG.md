@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.4-alpha — Crash mitigation
+
+- Avoid nesting section-group `AutomaticSize.Y` within scrolling-frame automatic canvas sizing. A measured `UIListLayout.AbsoluteContentSize` now controls group height only when it changes.
+- Initialize animated Matrix-rain text labels lazily. A window with the default rain-off setting no longer creates those labels during startup.
+- Preserve v0.4.3 styling, existing methods, profiles and distribution URL.
+- Add HumuHub loader startup checkpoints. Actual root cause remains unconfirmed pending an in-game retest.
+
 ## 0.4.3-alpha — Appearance-first redesign
 
 - Establish a shared design token set for typography, spacing, radii, row sizes and colour semantics.
