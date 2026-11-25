@@ -1,73 +1,75 @@
-# changelog
+# Changelog
 
-Short version: what changed, what broke, what's still untested.
+Changes are listed here by version. The current build is still alpha, so some client-specific issues may remain.
 
 ## 0.5.0-alpha
 
-- Added global setting search. Header button or Ctrl+K; picks a tab and scrolls to the control.
-- Added proper confirm/cancel dialogs. Profile deletion uses one now instead of the double-click thing.
+- Added search across tabs and controls. Open it from the header or with Ctrl+K.
+- Added confirmation dialogs. Profile deletion now uses a proper confirmation instead of requiring two clicks.
 - Added collapsible sections, progress bars, status rows and `GetDiagnostics()`.
-- Tabs can have Roblox image icons now.
-- Put the new pixel fish in `assets/reefFish-icon.png` and removed the placeholder dot. Needs a Roblox image asset ID before it'll render in-game.
-- Kept the same config format and dist URL.
-- Search, dialogs and mobile layout still need hands-on testing in Roblox.
+- Added support for Roblox image IDs on window and tab icons.
+- Added the fish image to `assets/reefFish-icon.png` and removed the old placeholder. It still needs a Roblox asset ID to display in-game.
+- Kept the existing profile format and distribution URL.
+
+Search, dialogs and mobile behaviour still need live testing.
 
 ## 0.4.4-alpha
 
-- Changed section groups to use a measured height instead of nesting automatic sizing inside a scrolling canvas.
-- Stopped building Matrix-rain labels on startup when rain is disabled.
-- Added startup checkpoints to the HumuHub loader to narrow down crashes.
-- These are crash mitigations, not a confirmed fix for every client crash.
+- Replaced nested automatic section sizing with measured group heights to reduce unnecessary layout updates.
+- Stopped creating Matrix-rain labels during startup when rain is disabled.
+- Added startup logging to the HumuHub loader to help locate crashes.
+
+These changes address possible causes of startup issues. They haven't been confirmed as a complete crash fix.
 
 ## 0.4.3-alpha
 
-- Redid the window styling: flatter graphite shell, cleaner header, less noisy accent use.
-- Grouped related controls instead of stacking a separate card for everything.
-- Added shared spacing/type tokens and primary/secondary/danger button variants.
-- Buttons and toggles can show descriptions.
-- Rain is off by default. Default window moved to 600×420.
+- Reworked the window styling, title bar and navigation.
+- Added grouped settings, consistent spacing and less prominent accent colours.
+- Added primary, secondary and danger button variants.
+- Added optional descriptions to buttons and toggles.
+- Made Matrix rain opt-in and increased the default window size to 600×420.
 
 ## 0.4.2-alpha
 
-- Fixed the title-bar drag jump.
-- Window keeps its requested size when the viewport shrinks and restores it when space comes back.
-- Added horizontal tabs for small windows.
-- Virtualized dropdown rows. The old 50-result cutoff is gone.
-- Improved touch tracking and cleaned up control listeners, flags and theme bindings on destroy.
+- Fixed the window jumping when dragging from a scaled position.
+- Made the window remember its requested size after the viewport changes.
+- Added horizontal tab navigation for narrow screens.
+- Changed dropdowns to use virtual scrolling instead of cutting off after 50 options.
+- Improved touch handling and cleanup of listeners, flags and theme references.
 
 ## 0.4.1-alpha
 
-- Added window resize grip and `SetSize`.
-- Improved viewport fit, dropdown positioning, numeric input validation and paragraph auto-height.
-- Stopped rain updates while hidden/minimized; added columns when resizing.
-- Added more cases to the Studio demo.
+- Added a resize grip and `SetSize`.
+- Improved dropdown positioning and smaller-screen handling.
+- Added numeric input validation and automatically sized paragraphs.
+- Paused rain rendering while the window is hidden or minimised.
 
 ## 0.4.0-alpha
 
-- Cut the thick border down to 5px.
-- Reworked sidebar/content proportions and typography.
-- Switched toggles to proper switches and tightened up sliders and dropdowns.
-- Colour picker starts folded instead of filling the panel.
+- Reduced the default border thickness to 5px.
+- Adjusted the sidebar layout and typography.
+- Reworked toggles, sliders and dropdown styling.
+- Made colour pickers collapsed by default.
 
 ## 0.3.0-alpha
 
-- Colour picker (HSV/HEX/RGB), keybind modes, multi-dropdowns and paragraph cards.
+- Added the HSV/HEX/RGB colour picker, keybind modes, multi-dropdowns and paragraphs.
 - Added toasts and custom accent colours.
-- Configs started saving Color3 and string arrays. Profile schema stayed at v1.
-- Kept the pinned `dist/reefFish-v0.3.lua` build.
+- Expanded profile serialization to support Color3 values and string arrays.
+- Kept a pinned build at `dist/reefFish-v0.3.lua`.
 
 ## 0.2.0-alpha
 
-- Improved the rain animation and control hover/focus states.
-- Added appearance controls and named profile management.
-- Added basic filesystem detection with in-memory fallback.
+- Improved the rain animation, hover states and input focus outlines.
+- Added named profiles and appearance settings.
+- Added basic filesystem detection with an in-memory fallback.
 
 ## 0.1.x
 
-- First window, tabs and standard controls.
-- Built the inverted Matrix border and later switched it to a single vertical masked rain field.
-- Searchable dropdowns, initial config storage and cleanup work.
+- Initial window, tabs and standard controls.
+- Built and revised the inverse-Matrix border effect.
+- Added searchable dropdowns and early configuration support.
 
 ---
 
-`src/reefFish.luau` is the editable source; `dist/reefFish.lua` is the current single-file build. Old pinned builds are kept separate. Syntax/static checks aren't a substitute for testing in Roblox.
+`src/reefFish.luau` is the source file. `dist/reefFish.lua` is the single-file build. Static checks don't replace testing inside Roblox.
